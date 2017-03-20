@@ -1,6 +1,10 @@
 """Main DQN agent."""
+import torch
+import torch.nn
+import copy
 
-class DQNAgent:
+
+class DQNAgent(object):
     """Class implementing DQN.
 
     This is a basic outline of the functions/parameters you will need
@@ -40,7 +44,7 @@ class DQNAgent:
     """
     def __init__(self,
                  q_network,
-                 preprocessor,
+                 # preprocessor,
                  memory,
                  policy,
                  gamma,
@@ -48,37 +52,61 @@ class DQNAgent:
                  num_burn_in,
                  train_freq,
                  batch_size):
-        pass
+        # should never use online_q for evaluation
+        self.online_q_net = q_network
+        # should always use target_q for evaluation
+        self.target_q_net = copy.deepcopy(q_network)
+        # TODO: should set target_q_net to eval()?
 
-    def compile(self, optimizer, loss_func):
-        """Setup all of the TF graph variables/ops.
+        self.replay_memory = memory
+        self.policy = policy # policy should be a function?
+        self.gamma = gamma
+        self.target_update_freq = target_update_freq
+        self.num_burn_in = num_burn_in
+        self.train_freq = train_freq # what is this?
+        self.batch_size = batch_size
 
-        This is inspired by the compile method on the
-        keras.models.Model class.
+    # @property
+    # def training(self):
+    #     return self.q_network.training
 
-        This is a good place to create the target network, setup your
-        loss function and any placeholders you might need.
-        
-        You should use the mean_huber_loss function as your
-        loss_function. You can also experiment with MSE and other
-        losses.
+    # def train_mode(self):
+    #     assert not self.q_network.training
+    #     self.q_network.train()
 
-        The optimizer can be whatever class you want. We used the
-        keras.optimizers.Optimizer class. Specifically the Adam
-        optimizer.
+    # def eval_mode(self):
+    #     assert self.q_network.training
+    #     self.q_network.eval()
+
+    # def compile(self, optimizer, loss_func):
+    #     """Setup all of the TF graph variables/ops.
+
+    #     This is inspired by the compile method on the
+    #     keras.models.Model class.
+
+    #     This is a good place to create the target network, setup your
+    #     loss function and any placeholders you might need.
+
+    #     You should use the mean_huber_loss function as your
+    #     loss_function. You can also experiment with MSE and other
+    #     losses.
+
+    #     The optimizer can be whatever class you want. We used the
+    #     keras.optimizers.Optimizer class. Specifically the Adam
+    #     optimizer.
+    #     """
+    #     pass
+
+    def target_q_values(self, states):
+        """Given a batch of states calculate the Q-values.
+
+        states: Tensor with size: [batch_size, num_frames, frame_size, frame_sizew]
+        return: Tensor with Q values, evaluated with target_q_net
         """
-        pass
-
-    def calc_q_values(self, state):
-        """Given a state (or batch of states) calculate the Q-values.
-
-        Basically run your network on these states.
-
-        Return
-        ------
-        Q-values for the state(s)
-        """
-        pass
+        utils.assert_eq(type(states), torch.cuda.FloatTensor)
+        q_vals = self.target_q_net(Variable(states), volatile=True).data
+        utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
+        return q_vals
 
     def select_action(self, state, **kwargs):
         """Select the action based on the current state.
@@ -106,7 +134,7 @@ class DQNAgent:
     def update_policy(self):
         """Update your policy.
 
-        Behavior may differ based on what stage of training your
+        Behavior may differ based on what stage of training you're
         in. If you're in training mode then you should check if you
         should update your network parameters based on the current
         step and the value you set for train_freq.
@@ -149,7 +177,7 @@ class DQNAgent:
 
     def evaluate(self, env, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
-        
+
         You shouldn't update your network parameters here. Also if you
         have any layers that vary in behavior between train/test time
         (such as dropout or batch norm), you should set them to test.
@@ -160,4 +188,3 @@ class DQNAgent:
         You can also call the render function here if you want to
         visually inspect your policy.
         """
-        pass
