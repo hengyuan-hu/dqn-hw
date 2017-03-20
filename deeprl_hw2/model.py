@@ -32,6 +32,7 @@ class QNetwork(nn.Module):
 
         self.conv = conv
         self.fc = fc
+        utils.weights_init(self)
         self.cuda()
 
     def forward(self, x):
