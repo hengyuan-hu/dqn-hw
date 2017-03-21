@@ -138,7 +138,6 @@ class ReplayMemory(object):
         self.samples = []
         self.oldest_idx = 0
 
-
 def samples_to_minibatch(samples, q_agent):
     """[samples] -> minibatch (xs, as, ys)
     convert [sample.state] to input tensor xs
@@ -150,9 +149,6 @@ def samples_to_minibatch(samples, q_agent):
         as: (b, n_actions) one-hot FloatTensor
         ys: (b, 1) FloatTensor
     """
-    import time
-    import numpy as np
-
     batch_term, batch = [], []
     for sample in samples:
         batch_term.append(sample) if sample.end else batch.append(sample)
@@ -160,39 +156,36 @@ def samples_to_minibatch(samples, q_agent):
     if batch:
         batch = [(s.state.tolist(), s.next_state.tolist(), [s.action], [s.reward])
                  for s in batch]
-        xs, transitions, actions, ys = zip(*batch) # (32L, 4L, 84L, 84L) or (32L, 1L)
+        xs, next_states, actions, ys = zip(*batch) # (32L, 4L, 84L, 84L) or (32L, 1L)
 
+        # tensor.cuda() much faster than cuda.tensor
         xs = torch.FloatTensor(xs).cuda()
-        # xs = torch.from_numpy(
-        #     np.array(xs).astype(np.float32, copy=False)).cuda()
-        transitions = torch.FloatTensor(transitions).cuda()
-        # transitions = torch.from_numpy(
-        #     np.array(transitions).astype(np.float32, copy=False)).cuda()
+        next_states = torch.FloatTensor(next_states).cuda()
+        actions = torch.LongTensor(actions).cuda()
+        ys = torch.FloatTensor(ys).cuda()
 
-        actions = torch.cuda.LongTensor(actions)
-        ys = torch.cuda.FloatTensor(ys)
-        q_values = q_agent.target_q_values(transitions) # Tensor (b, n_actions)
-        n_actions = q_values.size()[1]
-        max_qs = q_values.max(1)[0] # FloatTensor
+        q_values = q_agent.target_q_values(next_states) # Tensor (b, n_actions)
+        n_actions = q_values.size(1)
+        max_qs = q_values.max(1)[0] # max returns a pair
         ys += max_qs.mul(q_agent.gamma)
 
     if batch_term:
         batch_term = [ (s.state.tolist(), [s.action], [s.reward]) for s in batch_term]
         xs_term, actions_term, ys_term = zip(*batch_term)
-        xs_term = torch.cuda.FloatTensor(xs_term)
-        actions_term = torch.cuda.LongTensor(actions_term)
-        ys_term = torch.cuda.FloatTensor(ys_term)
+        xs_term = torch.FloatTensor(xs_term).cuda()
+        actions_term = torch.LongTensor(actions_term).cuda()
+        ys_term = torch.FloatTensor(ys_term).cuda()
 
-        if batch:
-            xs = torch.cat((xs, xs_term))
-            actions = torch.cat((actions, actions_term))
-            ys = torch.cat((ys, ys_term))
-        else:
-            xs = xs_term
-            actions = actions_term
-            ys = ys_term
-
+    if batch_term and batch:
+        xs = torch.cat((xs, xs_term))
+        actions = torch.cat((actions, actions_term))
+        ys = torch.cat((ys, ys_term))
+    if batch_term and not batch:
+        xs = xs_term
+        actions = actions_term
+        ys = ys_term
     # now x, a, y must contain all samples
+
     # convert to one-hot
     actions = torch.zeros(len(samples), n_actions).cuda().scatter_(1, actions, 1)
 
