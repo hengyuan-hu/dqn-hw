@@ -43,7 +43,7 @@ class QNetwork(nn.Module):
         utils.assert_eq(y.dim(), 2)
         return y
 
-    def loss(self, x, y, a):
+    def loss(self, x, a, y):
         utils.assert_eq(type(x), torch.cuda.FloatTensor)
         utils.assert_eq(type(y), torch.cuda.FloatTensor)
         utils.assert_eq(type(a), torch.cuda.FloatTensor)
@@ -51,14 +51,12 @@ class QNetwork(nn.Module):
         q_vals = self.forward(Variable(x))
         utils.assert_eq(q_vals.size(), a.size())
         y_pred = (q_vals * Variable(a)).sum(1)
-        print 'y_pred shape:', y_pred.size()
-        print 'y_target shape:', y.size()
         err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
         return err
 
-    def train_step(self, x, y, a):
+    def train_step(self, x, a, y):
         utils.assert_zero_grads(self.parameters())
-        err = self.loss(x, y, a)
+        err = self.loss(x, a, y)
         err.backward()
         self.optim.step()
         self.zero_grad()
