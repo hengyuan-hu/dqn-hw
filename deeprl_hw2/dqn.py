@@ -1,8 +1,9 @@
 """Main DQN agent."""
+import copy
 import torch
 import torch.nn
-import copy
-
+import numpy as np
+from policy import GreedyEpsilonPolicy
 
 class DQNAgent(object):
     """Class implementing DQN.
@@ -46,61 +47,36 @@ class DQNAgent(object):
                  q_network,
                  # preprocessor,
                  memory,
-                 policy,
+                 # policy,
                  gamma,
                  target_update_freq,
-                 num_burn_in,
-                 train_freq,
+                 # num_burn_in,
+                 # train_freq,
                  batch_size):
-        # should never use online_q for evaluation
         self.online_q_net = q_network
-        # should always use target_q for evaluation
         self.target_q_net = copy.deepcopy(q_network)
-        # TODO: should set target_q_net to eval()?
 
         self.replay_memory = memory
-        self.policy = policy # policy should be a function?
         self.gamma = gamma
         self.target_update_freq = target_update_freq
-        self.num_burn_in = num_burn_in
-        self.train_freq = train_freq # what is this?
+        # self.num_burn_in = num_burn_in
         self.batch_size = batch_size
 
-    # @property
-    # def training(self):
-    #     return self.q_network.training
-
-    # def train_mode(self):
-    #     assert not self.q_network.training
-    #     self.q_network.train()
-
-    # def eval_mode(self):
-    #     assert self.q_network.training
-    #     self.q_network.eval()
-
-    # def compile(self, optimizer, loss_func):
-    #     """Setup all of the TF graph variables/ops.
-
-    #     This is inspired by the compile method on the
-    #     keras.models.Model class.
-
-    #     This is a good place to create the target network, setup your
-    #     loss function and any placeholders you might need.
-
-    #     You should use the mean_huber_loss function as your
-    #     loss_function. You can also experiment with MSE and other
-    #     losses.
-
-    #     The optimizer can be whatever class you want. We used the
-    #     keras.optimizers.Optimizer class. Specifically the Adam
-    #     optimizer.
-    #     """
-    #     pass
+    def burn_in(self, env, num_burn_in):
+        policy = GreedyEpsilonPolicy(1) # uniform policy
+        dummy_q_values = np.zeros(env.num_actions)
+        for _ in xrange(num_burn_in):
+            if env.end:
+                state = env.reset()
+            action = policy(dummy_q_values)
+            next_state, reward = env.step(action)
+            self.replay_memory.append(state, action, reward, next_state, env.end)
+            state = next_state
 
     def target_q_values(self, states):
         """Given a batch of states calculate the Q-values.
 
-        states: Tensor with size: [batch_size, num_frames, frame_size, frame_sizew]
+        states: Tensor with size: [batch_size, num_frames, frame_size, frame_size]
         return: Tensor with Q values, evaluated with target_q_net
         """
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
@@ -108,47 +84,45 @@ class DQNAgent(object):
         utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
         return q_vals
 
-    def select_action(self, state, **kwargs):
-        """Select the action based on the current state.
+    def _online_q_values(self, states):
+        utils.assert_eq(type(states), torch.cuda.FloatTensor)
+        q_vals = self.online_q_net(Variable(states), volatile=True).data
+        utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
+        return q_vals
 
-        You will probably want to vary your behavior here based on
-        which stage of training your in. For example, if you're still
-        collecting random samples you might want to use a
-        UniformRandomPolicy.
+    def select_action(self, states, policy):
+        """Select the action based on the current state and ONLINE Q Network.
 
-        If you're testing, you might want to use a GreedyEpsilonPolicy
-        with a low epsilon.
-
-        If you're training, you might want to use the
-        LinearDecayGreedyEpsilonPolicy.
-
-        This would also be a good place to call
-        process_state_for_network in your preprocessor.
-
-        Returns
-        --------
-        selected action
+        states: Tensor with size: [batch_size, num_frames, frame_size, frame_size]
+                states SHOULD BE preoprocessed
+        policy: policy takes Q-values and return actions
+        returns:  selected action, 1-d array (batch_size,)
         """
-        pass
+        q_vals = self._online_q_values(states)
+        utils.assert_eq(q_vals.dim(), 2) # [batch_size, num_actions]
+        # q_vals is a torch.cuda.FloatTensor
+        action = policy(q_vals.cpu().numpy())
+        return action
 
-    def update_policy(self):
-        """Update your policy.
 
-        Behavior may differ based on what stage of training you're
-        in. If you're in training mode then you should check if you
-        should update your network parameters based on the current
-        step and the value you set for train_freq.
+    # def update_policy(self):
+    #     """Update your policy.
 
-        Inside, you'll want to sample a minibatch, calculate the
-        target values, update your network, and then update your
-        target values.
+    #     Behavior may differ based on what stage of training you're
+    #     in. If you're in training mode then you should check if you
+    #     should update your network parameters based on the current
+    #     step and the value you set for train_freq.
 
-        You might want to return the loss and other metrics as an
-        output. They can help you monitor how training is going.
-        """
-        pass
+    #     Inside, you'll want to sample a minibatch, calculate the
+    #     target values, update your network, and then update your
+    #     target values.
 
-    def fit(self, env, num_iterations, max_episode_length=None):
+    #     You might want to return the loss and other metrics as an
+    #     output. They can help you monitor how training is going.
+    #     """
+    #     pass
+
+    def train(self, env, num_iterations, max_episode_length=None):
         """Fit your model to the provided environment.
 
         Its a good idea to print out things like loss, average reward,
@@ -173,9 +147,11 @@ class DQNAgent(object):
           How long a single episode should last before the agent
           resets. Can help exploration.
         """
-        pass
 
-    def evaluate(self, env, num_episodes, max_episode_length=None):
+
+
+
+    def eval(self, env, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
 
         You shouldn't update your network parameters here. Also if you

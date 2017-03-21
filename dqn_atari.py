@@ -5,47 +5,13 @@ import os
 import random
 
 import numpy as np
-import tensorflow as tf
-from keras.layers import (Activation, Convolution2D, Dense, Flatten, Input,
-                          Permute)
-from keras.models import Model
-from keras.optimizers import Adam
 
-import deeprl_hw2 as tfrl
+# always import env (import cv2) first, to avoid opencv magic
+from deeprl_hw2.env import Environment
 from deeprl_hw2.dqn import DQNAgent
-from deeprl_hw2.objectives import mean_huber_loss
-
-
-# def create_model(window, input_shape, num_actions,
-#                  model_name='q_network'):  # noqa: D103
-#     """Create the Q-network model.
-
-#     Use Keras to construct a keras.models.Model instance (you can also
-#     use the SequentialModel class).
-
-#     We highly recommend that you use tf.name_scope as discussed in
-#     class when creating the model and the layers. This will make it
-#     far easier to understnad your network architecture if you are
-#     logging with tensorboard.
-
-#     Parameters
-#     ----------
-#     window: int
-#       Each input to the network is a sequence of frames. This value
-#       defines how many frames are in the sequence.
-#     input_shape: tuple(int, int)
-#       The expected input image size.
-#     num_actions: int
-#       Number of possible actions. Defined by the gym environment.
-#     model_name: str
-#       Useful when debugging. Makes the model show up nicer in tensorboard.
-
-#     Returns
-#     -------
-#     keras.models.Model
-#       The Q-model.
-#     """
-#     pass
+from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
+from deeprl_hw2.model import QNetwork
+from deeprl_hw2.core import ReplayMemory
 
 
 def get_output_folder(parent_dir, env_name):
@@ -80,26 +46,57 @@ def get_output_folder(parent_dir, env_name):
             pass
     experiment_id += 1
 
-    parent_dir = os.path.join(parent_dir, env_name)
-    parent_dir = parent_dir + '-run{}'.format(experiment_id)
-    return parent_dir
+    child_dir = os.path.join(parent_dir, env_name)
+    child_dir = child_dir + '-run{}'.format(experiment_id)
+    return child_dir
 
 
-def main():  # noqa: D103
-    parser = argparse.ArgumentParser(description='Run DQN on Atari Breakout')
-    parser.add_argument('--env', default='Breakout-v0', help='Atari env name')
-    parser.add_argument(
-        '-o', '--output', default='atari-v0', help='Directory to save data to')
-    parser.add_argument('--seed', default=0, type=int, help='Random seed')
+def main():
+    parser = argparse.ArgumentParser(description='Run DQN on Atari')
+    parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
+    parser.add_argument('--output', default='experiments/test0')
+    parser.add_argument('--seed', default=6666999, type=int, help='Random seed')
+    parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
+    parser.add_argument('--q_net', default='', type=str, help='load pretrained q net')
+    parser.add_argument('--gamma', default=0.99, type=float, help='discount factor')
+    parser.add_argument('--num_iter', default=5e6, type=int)
+    parser.add_argument('--replay_buffer_size', default=1e6, type=int)
+    parser.add_argument('--num_frames', default=4, type=int, help='nframe, QNet input')
+    parser.add_argument('--frame_size', default=84, type=int)
+    parser.add_argument('--target_q_sync_interval', default=1e4, type=int)
+    parser.add_argument('--batch_size', default=32, type=int)
+    parser.add_argument('--train_start_eps', default=1.0, type=float)
+    parser.add_argument('--train_final_eps', default=0.1, type=float)
+    parser.add_argument('--train_eps_num_steps', default=1e6, type=int)
+    parser.add_argument('--eval_eps', default=0.05, type=float)
+    parser.add_argument('--num_burn_in', default=300, type=float)
 
     args = parser.parse_args()
-    args.input_shape = tuple(args.input_shape)
+    # args.output = get_output_folder(args.output, args.env)
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+    with open(os.path.join(args.output, 'configs.txt'), 'w') as f:
+        print >>f, args
 
-    args.output = get_output_folder(args.output, args.env)
 
-    # here is where you should start up a session,
+    env = Environment(args.env, args.num_frames, args.frame_size)
+    q_net = QNetwork(
+        args.num_frames, args.frame_size, env.num_actions, args.lr, args.q_net)
+    replay_memory = ReplayMemory(args.replay_buffer_size)
+    train_policy = LinearDecayGreedyEpsilonPolicy(
+        args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
+    eval_policy = GreedyEpsilonPolicy(args.eval_eps)
+
+    agent = DQNAgent(q_net,
+                     replay_memory,
+                     args.gamma,
+                     args.target_q_sync_interval,
+                     args.batch_size)
+    agent.burn_in(env, args.num_burn_in)
+
+    return agent
     # create your DQN agent, create your model, etc.
     # then you can run your fit method.
 
 if __name__ == '__main__':
-    main()
+    agent = main()
