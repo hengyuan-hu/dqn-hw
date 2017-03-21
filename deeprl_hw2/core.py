@@ -1,7 +1,7 @@
 """Core classes."""
 import utils
 import random
-
+import torch
 
 class Sample(object):
     """Represents a reinforcement learning sample.
@@ -132,22 +132,61 @@ class ReplayMemory(object):
         """Simpliest uniform sampling (w/o replacement) to produce a batch."""
         assert batch_size < len(self.samples), 'no enough samples to sample from'
         assert indexes is None, 'not supported yet'
-        return random.sample(self.samples)
+        return random.sample(self.samples, batch_size)
 
     def clear(self):
         self.samples = []
         self.oldest_idx = 0
 
 
-def samples_to_minibatch(samples, q_network):
-    """[samples] -> minibatch (xs, ys)
-
+def samples_to_minibatch(samples, q_agent):
+    """[samples] -> minibatch (xs, as, ys)
     convert [sample.state] to input tensor xs
     compute target tensor ys according to whether terminate and q_network
+    it is possible to have only one kind of sample (all term/non-term)
 
     return: Tensors that can be directly used by q_network
+        xs: (b, ?) FloatTensor
+        as: (b, n_actions) one-hot FloatTensor
+        ys: (b, 1) FloatTensor
     """
-    pass
+    batch_term, batch = [], []
+    for sample in samples:
+        batch_term.append(sample) if sample.end else batch.append(sample)
+
+    if batch:
+        batch = [ (s.state.tolist(), [s.action], [s.reward]) for s in batch]
+        xs, actions, ys = zip(*batch) # (32L, 4L, 84L, 84L) (32L, 1L) (32L, 1L)
+        xs = torch.cuda.FloatTensor(xs)
+        actions = torch.cuda.LongTensor(actions)
+        ys = torch.cuda.FloatTensor(ys)
+
+        q_values = q_agent.target_q_values(xs) # Tensor (b, n_actions)
+
+        n_actions = q_values.size()[1]
+        max_qs = q_values.max(1)[0] # FloatTensor
+        ys += max_qs.mul(q_agent.gamma)
+
+    if batch_term:
+        batch_term = [ (s.state.tolist(), [s.action], [s.reward]) for s in batch_term]
+        xs_term, actions_term, ys_term = zip(*batch_term)
+        xs_term = torch.cuda.FloatTensor(xs_term)
+        actions_term = torch.cuda.LongTensor(actions_term)
+        ys_term = torch.cuda.FloatTensor(ys_term)
+        if batch:
+            xs = torch.cat((xs, xs_term))
+            actions = torch.cat((actions, actions_term))
+            ys = torch.cat((ys, ys_term))
+        else:
+            xs = xs_term
+            actions = actions_term
+            ys = ys_term
+    # now x, a, y must contain all samples
+    # convert to one-hot
+    actions = torch.zeros(len(samples), n_actions).scatter_(1, actions, 1)
+
+    assert xs.size(0)==len(samples)
+    return xs, actions, ys
 
 # Preprocess is done in the Env class
 # class Preprocessor:
