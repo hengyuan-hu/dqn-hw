@@ -5,114 +5,36 @@ implementations and some unimplemented classes that should be useful
 in your code.
 """
 import numpy as np
-import attr
+import utils
 
 
-class Policy:
-    """Base class representing an MDP policy.
-
-    Policies are used by the agent to choose actions.
-
-    Policies are designed to be stacked to get interesting behaviors
-    of choices. For instances in a discrete action space the lowest
-    level policy may take in Q-Values and select the action index
-    corresponding to the largest value. If this policy is wrapped in
-    an epsilon greedy policy then with some probability epsilon, a
-    random action will be chosen.
-    """
-
-    def select_action(self, **kwargs):
-        """Used by agents to select actions.
-
-        Returns
-        -------
-        Any:
-          An object representing the chosen action. Type depends on
-          the hierarchy of policy instances.
-        """
-        raise NotImplementedError('This method should be overriden.')
-
-
-class UniformRandomPolicy(Policy):
-    """Chooses a discrete action with uniform random probability.
-
-    This is provided as a reference on how to use the policy class.
-
-    Parameters
-    ----------
-    num_actions: int
-      Number of actions to choose from. Must be > 0.
-
-    Raises
-    ------
-    ValueError:
-      If num_actions <= 0
-    """
-
-    def __init__(self, num_actions):
-        assert num_actions >= 1
-        self.num_actions = num_actions
-
-    def select_action(self, **kwargs):
-        """Return a random action index.
-
-        This policy cannot contain others (as they would just be ignored).
-
-        Returns
-        -------
-        int:
-          Action index in range [0, num_actions)
-        """
-        return np.random.randint(0, self.num_actions)
-
-    def get_config(self):  # noqa: D102
-        return {'num_actions': self.num_actions}
-
-
-class GreedyPolicy(Policy):
-    """Always returns best action according to Q-values.
-
-    This is a pure exploitation policy.
-    """
-
-    def select_action(self, q_values, **kwargs):  # noqa: D102
-        return np.argmax(q_values)
-
-
-class GreedyEpsilonPolicy(Policy):
-    """Selects greedy action or with some probability a random action.
-
-    Standard greedy-epsilon implementation. With probability epsilon
-    choose a random action. Otherwise choose the greedy action.
-
-    Parameters
-    ----------
-    epsilon: float
-     Initial probability of choosing a random action. Can be changed
-     over time.
-    """
+class GreedyEpsilonPolicy(object):
     def __init__(self, epsilon):
-        pass
+        self.epsilon = np.float32(epsilon)
 
-    def select_action(self, q_values, **kwargs):
+    def __call__(self, q_values):
+        return self.select_action(q_values)
+
+    def _greedy(self):
+        return np.random.uniform() > self.epsilon
+
+    def select_action(self, q_values):
         """Run Greedy-Epsilon for the given Q-values.
-
-        Parameters
-        ----------
-        q_values: array-like
-          Array-like structure of floats representing the Q-values for
-          each action.
-
-        Returns
-        -------
-        int:
-          The action index chosen.
+        q_values: 2-d numpy.array
+        return: 1-d numpy.array representing actions to take
         """
+        utils.assert_eq(len(q_values.shape), 2)
+        batch_size, num_actions = q_values.shape
+        actions = q_values.argmax(axis=1)
+        if self.epsilon > 1e-6:
+            for i in xrange(batch_size):
+                if not self._greedy():
+                    actions[i] = np.random.randint(0, num_actions)
+        utils.assert_eq(len(actions.shape), 1)
+        return actions
 
-    pass
 
-
-class LinearDecayGreedyEpsilonPolicy(Policy):
+class LinearDecayGreedyEpsilonPolicy(GreedyEpsilonPolicy):
     """Policy with a parameter that decays linearly.
 
     Like GreedyEpsilonPolicy but the epsilon decays from a start value
@@ -129,27 +51,37 @@ class LinearDecayGreedyEpsilonPolicy(Policy):
 
     """
 
-    def __init__(self, policy, attr_name, start_value, end_value,
-                 num_steps):  # noqa: D102
-        pass
+    def __init__(self, start_eps, end_eps, num_steps):
+        super(LinearDecayGreedyEpsilonPolicy, self).__init__(start_eps)
+        self.num_steps = num_steps
+        self.decay_rate = (start_eps - end_eps) / float(num_steps)
 
-    def select_action(self, **kwargs):
-        """Decay parameter and select action.
+    def select_action(self, q_values):
+        actions = super(LinearDecayGreedyEpsilonPolicy, self).select_action(q_values)
+        if self.num_steps > 0:
+            self.epsilon -= self.decay_rate
+            self.num_steps -= 1
+        return actions
 
-        Parameters
-        ----------
-        q_values: np.array
-          The Q-values for each action.
-        is_training: bool, optional
-          If true then parameter will be decayed. Defaults to true.
 
-        Returns
-        -------
-        Any:
-          Selected action.
-        """
-        pass
+if __name__ == '__main__':
+    q_values = np.random.uniform(0, 1, (5, 3))
+    target_actions = q_values.argmax(axis=1)
 
-    def reset(self):
-        """Start the decay over at the start value."""
-        pass
+    greedy_policy = GreedyEpsilonPolicy(0)
+    actions = greedy_policy(q_values)
+    assert (actions == target_actions).all()
+
+    uniform_policy = GreedyEpsilonPolicy(1)
+    uni_actions = uniform_policy(q_values)
+    assert not (uni_actions == target_actions).all()
+
+    steps = 9
+    ldg_policy = LinearDecayGreedyEpsilonPolicy(1, 0.1, steps)
+    expect_eps = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.1]
+    actual_eps = [1.0]
+    for i in range(steps+1):
+        actions = ldg_policy(q_values)
+        actual_eps.append(ldg_policy.epsilon)
+    assert (np.abs((np.array(actual_eps) - np.array(expect_eps)))
+            < 1e-5).all()
