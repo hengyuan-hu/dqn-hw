@@ -2,7 +2,9 @@
 import copy
 import torch
 import torch.nn
+from torch.autograd import Variable
 import numpy as np
+import utils
 from policy import GreedyEpsilonPolicy
 
 class DQNAgent(object):
@@ -80,13 +82,13 @@ class DQNAgent(object):
         return: Tensor with Q values, evaluated with target_q_net
         """
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
-        q_vals = self.target_q_net(Variable(states), volatile=True).data
+        q_vals = self.target_q_net(Variable(states, volatile=True)).data
         utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
         return q_vals
 
     def _online_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
-        q_vals = self.online_q_net(Variable(states), volatile=True).data
+        q_vals = self.online_q_net(torch.Variable(states, volatile=True)).data
         utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
         return q_vals
 

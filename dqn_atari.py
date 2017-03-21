@@ -11,7 +11,7 @@ from deeprl_hw2.env import Environment
 from deeprl_hw2.dqn import DQNAgent
 from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
 from deeprl_hw2.model import QNetwork
-from deeprl_hw2.core import ReplayMemory
+from deeprl_hw2.core import ReplayMemory, samples_to_minibatch
 
 
 def get_output_folder(parent_dir, env_name):
@@ -93,6 +93,9 @@ def main():
                      args.target_q_sync_interval,
                      args.batch_size)
     agent.burn_in(env, args.num_burn_in)
+    samples = agent.replay_memory.sample(args.batch_size)
+    x, a, y = samples_to_minibatch(samples, agent)
+    print q_net.loss(x,y,a)
 
     return agent
     # create your DQN agent, create your model, etc.
