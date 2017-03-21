@@ -20,18 +20,16 @@ class GreedyEpsilonPolicy(object):
 
     def select_action(self, q_values):
         """Run Greedy-Epsilon for the given Q-values.
-        q_values: 2-d numpy.array
-        return: 1-d numpy.array representing actions to take
+        q_values: 1-d numpy.array
+        return: action, int
         """
-        utils.assert_eq(len(q_values.shape), 2)
-        batch_size, num_actions = q_values.shape
-        actions = q_values.argmax(axis=1)
-        if self.epsilon > 1e-6:
-            for i in xrange(batch_size):
-                if not self._greedy():
-                    actions[i] = np.random.randint(0, num_actions)
-        utils.assert_eq(len(actions.shape), 1)
-        return actions
+        utils.assert_eq(len(q_values.shape), 1)
+        num_actions = q_values.shape[0]
+        if self._greedy():
+            action = q_values.argmax()
+        else:
+            action = np.random.randint(0, num_actions)
+        return action
 
 
 class LinearDecayGreedyEpsilonPolicy(GreedyEpsilonPolicy):
@@ -57,16 +55,16 @@ class LinearDecayGreedyEpsilonPolicy(GreedyEpsilonPolicy):
         self.decay_rate = (start_eps - end_eps) / float(num_steps)
 
     def select_action(self, q_values):
-        actions = super(LinearDecayGreedyEpsilonPolicy, self).select_action(q_values)
+        action = super(LinearDecayGreedyEpsilonPolicy, self).select_action(q_values)
         if self.num_steps > 0:
             self.epsilon -= self.decay_rate
             self.num_steps -= 1
-        return actions
+        return action
 
 
 if __name__ == '__main__':
-    q_values = np.random.uniform(0, 1, (5, 3))
-    target_actions = q_values.argmax(axis=1)
+    q_values = np.random.uniform(0, 1, (3,))
+    target_actions = q_values.argmax()
 
     greedy_policy = GreedyEpsilonPolicy(0)
     actions = greedy_policy(q_values)
