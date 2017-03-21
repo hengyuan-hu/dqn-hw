@@ -98,8 +98,15 @@ if __name__ == '__main__':
     agent = DQNAgent(q_net,
                      replay_memory,
                      args.gamma,
-                     args.target_q_sync_interval)
-    agent.burn_in(env, args.num_burn_in)
+                     args.target_q_sync_interval,
+                     args.num_burn_in)
 
     train_log = open(os.path.join(args.output, 'train_log.txt'), 'w')
-    agent.train(env, train_policy, args.batch_size, args.num_iters, train_log)
+    eval_args = {
+        'eval_per_eps': 20,
+        'eval_policy': eval_policy,
+        'num_episodes': 2
+    }
+    # args.num_iters = 300
+    agent.train(env, train_policy, args.batch_size, args.num_iters,
+                train_log, eval_args)

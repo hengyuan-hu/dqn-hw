@@ -50,34 +50,29 @@ class DQNAgent(object):
     """
     def __init__(self,
                  q_network,
-                 # preprocessor,
                  memory,
-                 # policy,
                  gamma,
                  target_update_freq,
-                 # num_burn_in,
-                 # train_freq,
-                 # batch_size
-    ):
+                 num_burn_in):
         self.online_q_net = q_network
         self.target_q_net = copy.deepcopy(q_network)
 
         self.replay_memory = memory
         self.gamma = gamma
         self.target_update_freq = target_update_freq
-        # self.num_burn_in = num_burn_in
-        # self.batch_size = batch_size
+        self.num_burn_in = num_burn_in
 
-    def burn_in(self, env, num_burn_in):
+    def _burn_in(self, env):
         policy = GreedyEpsilonPolicy(1) # uniform policy
         dummy_q_values = np.zeros(env.num_actions)
-        for _ in xrange(num_burn_in):
+        for i in xrange(self.num_burn_in):
             if env.end:
                 state = env.reset()
             action = policy(dummy_q_values)
             next_state, reward = env.step(action)
             self.replay_memory.append(state, action, reward, next_state, env.end)
             state = next_state
+        return state
 
     def target_q_values(self, states):
         """Given a batch of states calculate the Q-values.
@@ -117,7 +112,7 @@ class DQNAgent(object):
         loss = self.online_q_net.train_step(x, a, y)
         return loss
 
-    def train(self, env, policy, batch_size, num_iters, log_file):
+    def train(self, env, policy, batch_size, num_iters, log_file, eval_args):
         # , max_episode_length=None):
         """Fit your model to the provided environment.
 
@@ -143,18 +138,35 @@ class DQNAgent(object):
           How long a single episode should last before the agent
           resets. Can help exploration.
         """
-        assert len(self.replay_memory) > 0, 'no burn in memory'
-        freq_avg_rewards = 1000
-        rewards = np.zeros(freq_avg_rewards)
-
         state_gpu = torch.cuda.FloatTensor(
             1, env.num_frames, env.frame_size, env.frame_size)
-        state = env.reset() # always start from new episode
+        state = self._burn_in(env)
 
+        num_episodes = 0
+        rewards = []
         t = time.time()
         for i in xrange(num_iters):
             if env.end:
+                # log and eval
+                num_episodes += 1
+                log = ('Episode: %d, Iter: %d, Reward Sum: %s\n'
+                       % (num_episodes, i+1, sum(rewards)))
+                log += '\tTime taken: %s' % (time.time() - t)
+                rewards = []
+
+                if num_episodes % eval_args['eval_per_eps'] == 0:
+                    log += '\n'
+                    log += self.eval(
+                        env, eval_args['eval_policy'], eval_args['num_episodes'])
+
+                print log
+                log_file.write(log+'\n')
+                log_file.flush()
+                t = time.time()
+
+                # main task ...
                 state = env.reset()
+
             state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
             action = self.select_action(state_gpu, policy)
             next_state, reward = env.step(action)
@@ -163,27 +175,39 @@ class DQNAgent(object):
             self._update_q_net(batch_size)
             if (i+1) % self.target_update_freq:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
+            rewards.append(reward)
 
-            rewards[i % freq_avg_rewards] = reward
-            if (i+1) % freq_avg_rewards == 0:
-                log = 'iter: %d,  avg reward: %s' % (i+1, rewards.mean())
-                log += '\ttime taken: %s' % (time.time() - t)
-                print log
-                log_file.write(log+'\n')
-                log_file.flush()
-                t = time.time()
-
-    def eval(self, env, num_episodes, max_episode_length=None):
+    def eval(self, env, policy, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
-
-        You shouldn't update your network parameters here. Also if you
-        have any layers that vary in behavior between train/test time
-        (such as dropout or batch norm), you should set them to test.
-
-        Basically run your policy on the environment and collect stats
-        like cumulative reward, average episode length, etc.
 
         You can also call the render function here if you want to
         visually inspect your policy.
         """
-        pass
+        state_gpu = torch.cuda.FloatTensor(
+            1, env.num_frames, env.frame_size, env.frame_size)
+        state = env.reset() # TODO: em???
+
+        total_rewards = np.zeros(num_episodes)
+        rewards = []
+        eps_idx = 0
+        log = ''
+        while eps_idx < num_episodes:
+            if env.end:
+                state = env.reset()
+                total_rewards[eps_idx] = sum(rewards)
+                eps_log = ('>>>Eval: [%d/%d], rewards: %s\n' %
+                           (eps_idx+1, num_episodes, total_rewards[eps_idx]))
+                # print eps_log
+                log += eps_log
+                eps_idx += 1
+                rewards = []
+
+            state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
+            action = self.select_action(state_gpu, policy)
+            state, reward = env.step(action)
+            rewards.append(reward)
+
+        eps_log = '>>>Eval: avg total rewards: %s' % total_rewards.mean()
+        # print eps_log
+        log += eps_log
+        return log
