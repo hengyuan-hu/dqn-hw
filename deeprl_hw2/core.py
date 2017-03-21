@@ -2,6 +2,8 @@
 import utils
 import random
 import torch
+import time
+import numpy as np
 
 class Sample(object):
     """Represents a reinforcement learning sample.
@@ -149,45 +151,35 @@ def samples_to_minibatch(samples, q_agent):
         as: (b, n_actions) one-hot FloatTensor
         ys: (b, 1) FloatTensor
     """
-    batch_term, batch = [], []
-    for sample in samples:
-        batch_term.append(sample) if sample.end else batch.append(sample)
+    assert len(samples)>0
+    dummy = samples[0]
 
-    if batch:
-        batch = [(s.state.tolist(), s.next_state.tolist(), [s.action], [s.reward])
-                 for s in batch]
-        xs, next_states, actions, ys = zip(*batch) # (32L, 4L, 84L, 84L) or (32L, 1L)
+    xs = np.zeros((len(samples),)+ dummy.state.shape, dtype=np.float32)
+    next_states = np.zeros_like(xs)
+    ys = np.zeros((len(samples), 1), dtype=np.float32)
+    actions = np.zeros_like(ys, dtype=np.int64)
+    ends = np.zeros_like(ys)
+    for i, s in enumerate(samples):
+        xs[i] = s.state
+        next_states[i] = s.next_state
+        ys[i] = s.reward
+        actions[i] = s.action
+        ends[i] = 0.0 if s.end else 1.0
 
-        # tensor.cuda() much faster than cuda.tensor
-        xs = torch.FloatTensor(xs).cuda()
-        next_states = torch.FloatTensor(next_states).cuda()
-        actions = torch.LongTensor(actions).cuda()
-        ys = torch.FloatTensor(ys).cuda()
+    xs = torch.from_numpy(xs).cuda()
+    next_states = torch.from_numpy(next_states).cuda()
+    actions = torch.from_numpy(actions).cuda()
+    ys = torch.from_numpy(ys).cuda()
+    ends = torch.from_numpy(ends).cuda()
 
-        q_values = q_agent.target_q_values(next_states) # Tensor (b, n_actions)
-        n_actions = q_values.size(1)
-        max_qs = q_values.max(1)[0] # max returns a pair
-        ys += max_qs.mul(q_agent.gamma)
-
-    if batch_term:
-        batch_term = [ (s.state.tolist(), [s.action], [s.reward]) for s in batch_term]
-        xs_term, actions_term, ys_term = zip(*batch_term)
-        xs_term = torch.FloatTensor(xs_term).cuda()
-        actions_term = torch.LongTensor(actions_term).cuda()
-        ys_term = torch.FloatTensor(ys_term).cuda()
-
-    if batch_term and batch:
-        xs = torch.cat((xs, xs_term))
-        actions = torch.cat((actions, actions_term))
-        ys = torch.cat((ys, ys_term))
-    if batch_term and not batch:
-        xs = xs_term
-        actions = actions_term
-        ys = ys_term
-    # now x, a, y must contain all samples
+    q_values = q_agent.target_q_values(next_states) # Tensor (b, n_actions)
+    n_actions = q_values.size(1)
+    max_qs = q_values.max(1)[0] # max returns a pair
+    ys += max_qs.mul(q_agent.gamma).mul(ends)
 
     # convert to one-hot
     actions = torch.zeros(len(samples), n_actions).cuda().scatter_(1, actions, 1)
 
     assert xs.size(0)==len(samples)
     return xs, actions, ys
+
