@@ -19,28 +19,25 @@ class Environment(object):
         assert num_frames>0
         self.env = gym.make(name)
         # force=True for debug easiness, need care before actual training
-        self.env = wrappers.Monitor(self.env, mnt_path, force=True)
+        # self.env = wrappers.Monitor(self.env, mnt_path, force=True)
         self.frame_size = frame_size
         self.num_frames = num_frames
         self.end = True
         self.total_reward = 0.0
         self.frames_queue = deque(maxlen=4)
-        self._reset()
+        # leave reset to user, as in env
 
-    def _reset(self):
-        """reset env and frame queue"""
+    def reset(self):
+        """reset env and frame queue, return initial state """
+        self.end = False
+        self.total_reward = 0.0
         initial_queue = [np.zeros((self.frame_size, self.frame_size))
                          for _ in range(self.num_frames-1)]
         self.frames_queue.extend(initial_queue)
-        initial_state = preprocess_frame(self.env.reset(), self.frame_size)
+        initial_state = self.env.reset()
+        initial_state = preprocess_frame(initial_state, self.frame_size)
         self.frames_queue.append(initial_state)
 
-    def reset(self):
-        self.end = False
-        self.total_reward = 0.0
-        self._reset()
-
-        # return initial state
         return np.array(self.frames_queue)
 
     def render(self):
@@ -67,7 +64,13 @@ class Environment(object):
         if reward != 0.0:
             reward = 1.0 if reward > 0 else -1.0
 
-        return np.array(self.frames_queue), reward
+        return np.array(self.frames_queue), reward, self.end, infor
+
+    def close(self):
+        self.env.close()
+
+    def seed(self, seed=None):
+        self.env.seed(seed)
 
 if __name__ == '__main__':
      env = gym.make('SpaceInvaders-v0')
