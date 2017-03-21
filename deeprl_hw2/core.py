@@ -41,6 +41,16 @@ class Sample(object):
         self.next_state = next_state
         self.end = end
 
+    def __str__(self):
+        info = ('S(mean): %3.4f, A: %s, R: %s, NS(mean): %3.4f, End: %s'
+                % (self.state.mean(), self.action, self.reward,
+                   self.next_state.mean(), self.end))
+        return info
+
+    def __repr__(self):
+        """this is bad"""
+        return self.__str__()
+
 
 class ReplayMemory(object):
     """Interface for replay memories.
@@ -81,7 +91,7 @@ class ReplayMemory(object):
     clear()
       Reset the memory. Deletes all references to the samples.
     """
-    def __init__(self, max_size, window_length):
+    def __init__(self, max_size):
         """Setup memory.
 
         You should specify the maximum size of the memory. Once the
