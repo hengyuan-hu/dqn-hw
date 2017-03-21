@@ -53,7 +53,7 @@ class QNetwork(nn.Module):
         y_pred = (q_vals * Variable(a)).sum(1)
         print 'y_pred shape:', y_pred.size()
         print 'y_target shape:', y.size()
-        err = nn.functional.smooth_l1_loss.forward(y_pred, y)
+        err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
         return err
 
     def train_step(self, x, y, a):

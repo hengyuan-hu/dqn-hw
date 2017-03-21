@@ -155,7 +155,8 @@ def samples_to_minibatch(samples, q_agent):
         batch_term.append(sample) if sample.end else batch.append(sample)
 
     if batch:
-        batch = [ (s.state.tolist(), s.next_state.tolist(), [s.action], [s.reward]) for s in batch]
+        batch = [(s.state.tolist(), s.next_state.tolist(), [s.action], [s.reward])
+                 for s in batch]
         xs, transitions, actions, ys = zip(*batch) # (32L, 4L, 84L, 84L) or (32L, 1L)
         xs = torch.cuda.FloatTensor(xs)
         transitions = torch.cuda.FloatTensor(transitions)
@@ -184,7 +185,7 @@ def samples_to_minibatch(samples, q_agent):
             ys = ys_term
     # now x, a, y must contain all samples
     # convert to one-hot
-    actions = torch.zeros(len(samples), n_actions).scatter_(1, actions, 1)
+    actions = torch.zeros(len(samples), n_actions).cuda().scatter_(1, actions, 1)
 
     assert xs.size(0)==len(samples)
     return xs, actions, ys

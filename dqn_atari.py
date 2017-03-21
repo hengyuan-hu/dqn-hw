@@ -78,6 +78,7 @@ def main():
     with open(os.path.join(args.output, 'configs.txt'), 'w') as f:
         print >>f, args
 
+    #TODO: set random seed
 
     env = Environment(args.env, args.num_frames, args.frame_size)
     q_net = QNetwork(
@@ -93,13 +94,12 @@ def main():
                      args.target_q_sync_interval,
                      args.batch_size)
     agent.burn_in(env, args.num_burn_in)
-    samples = agent.replay_memory.sample(args.batch_size)
-    x, a, y = samples_to_minibatch(samples, agent)
-    print q_net.loss(x,y,a)
-
-    return agent
+    return agent, args
     # create your DQN agent, create your model, etc.
     # then you can run your fit method.
 
 if __name__ == '__main__':
-    agent = main()
+    agent, args = main()
+    samples = agent.replay_memory.sample(args.batch_size)
+    x, a, y = samples_to_minibatch(samples, agent)
+    # print q_net.loss(x, y, a)
