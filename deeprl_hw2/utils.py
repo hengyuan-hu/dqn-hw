@@ -14,7 +14,7 @@ def assert_eq(real, expected):
 def assert_zero_grads(params):
     for p in params:
         if p.grad is not None:
-            utils.assert_eq(p.grad.data.sum(), 0)
+            assert_eq(p.grad.data.sum(), 0)
 
 
 def assert_frozen(module):

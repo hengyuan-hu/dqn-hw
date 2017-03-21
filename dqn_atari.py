@@ -3,11 +3,11 @@
 import argparse
 import os
 import random
-
 import numpy as np
 
 # always import env (import cv2) first, to avoid opencv magic
 from deeprl_hw2.env import Environment
+import torch
 from deeprl_hw2.dqn import DQNAgent
 from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
 from deeprl_hw2.model import QNetwork
@@ -59,15 +59,15 @@ def main():
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--q_net', default='', type=str, help='load pretrained q net')
     parser.add_argument('--gamma', default=0.99, type=float, help='discount factor')
-    parser.add_argument('--num_iter', default=5e6, type=int)
-    parser.add_argument('--replay_buffer_size', default=1e6, type=int)
+    parser.add_argument('--num_iters', default=5000000, type=int)
+    parser.add_argument('--replay_buffer_size', default=1000000, type=int)
     parser.add_argument('--num_frames', default=4, type=int, help='nframe, QNet input')
     parser.add_argument('--frame_size', default=84, type=int)
-    parser.add_argument('--target_q_sync_interval', default=1e4, type=int)
+    parser.add_argument('--target_q_sync_interval', default=10000, type=int)
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--train_start_eps', default=1.0, type=float)
     parser.add_argument('--train_final_eps', default=0.1, type=float)
-    parser.add_argument('--train_eps_num_steps', default=1e6, type=int)
+    parser.add_argument('--train_eps_num_steps', default=1000000, type=int)
     parser.add_argument('--eval_eps', default=0.05, type=float)
     parser.add_argument('--num_burn_in', default=300, type=float)
 
@@ -79,6 +79,13 @@ def main():
         print >>f, args
 
     #TODO: set random seed
+    return args
+    # create your DQN agent, create your model, etc.
+    # then you can run your fit method.
+
+if __name__ == '__main__':
+    args = main()
+    torch.backends.cudnn.benckmark = True
 
     env = Environment(args.env, args.num_frames, args.frame_size)
     q_net = QNetwork(
@@ -91,15 +98,8 @@ def main():
     agent = DQNAgent(q_net,
                      replay_memory,
                      args.gamma,
-                     args.target_q_sync_interval,
-                     args.batch_size)
+                     args.target_q_sync_interval)
     agent.burn_in(env, args.num_burn_in)
-    return agent, args
-    # create your DQN agent, create your model, etc.
-    # then you can run your fit method.
 
-if __name__ == '__main__':
-    agent, args = main()
-    samples = agent.replay_memory.sample(args.batch_size)
-    x, a, y = samples_to_minibatch(samples, agent)
-    # print q_net.loss(x, y, a)
+    train_log = open(os.path.join(args.output, 'train_log.txt'), 'w')
+    agent.train(env, train_policy, args.batch_size, args.num_iters, train_log)

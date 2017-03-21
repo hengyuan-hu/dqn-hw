@@ -150,6 +150,9 @@ def samples_to_minibatch(samples, q_agent):
         as: (b, n_actions) one-hot FloatTensor
         ys: (b, 1) FloatTensor
     """
+    import time
+    import numpy as np
+
     batch_term, batch = [], []
     for sample in samples:
         batch_term.append(sample) if sample.end else batch.append(sample)
@@ -158,13 +161,17 @@ def samples_to_minibatch(samples, q_agent):
         batch = [(s.state.tolist(), s.next_state.tolist(), [s.action], [s.reward])
                  for s in batch]
         xs, transitions, actions, ys = zip(*batch) # (32L, 4L, 84L, 84L) or (32L, 1L)
-        xs = torch.cuda.FloatTensor(xs)
-        transitions = torch.cuda.FloatTensor(transitions)
+
+        xs = torch.FloatTensor(xs).cuda()
+        # xs = torch.from_numpy(
+        #     np.array(xs).astype(np.float32, copy=False)).cuda()
+        transitions = torch.FloatTensor(transitions).cuda()
+        # transitions = torch.from_numpy(
+        #     np.array(transitions).astype(np.float32, copy=False)).cuda()
+
         actions = torch.cuda.LongTensor(actions)
         ys = torch.cuda.FloatTensor(ys)
-
         q_values = q_agent.target_q_values(transitions) # Tensor (b, n_actions)
-
         n_actions = q_values.size()[1]
         max_qs = q_values.max(1)[0] # FloatTensor
         ys += max_qs.mul(q_agent.gamma)
@@ -175,6 +182,7 @@ def samples_to_minibatch(samples, q_agent):
         xs_term = torch.cuda.FloatTensor(xs_term)
         actions_term = torch.cuda.LongTensor(actions_term)
         ys_term = torch.cuda.FloatTensor(ys_term)
+
         if batch:
             xs = torch.cat((xs, xs_term))
             actions = torch.cat((actions, actions_term))
@@ -183,129 +191,10 @@ def samples_to_minibatch(samples, q_agent):
             xs = xs_term
             actions = actions_term
             ys = ys_term
+
     # now x, a, y must contain all samples
     # convert to one-hot
     actions = torch.zeros(len(samples), n_actions).cuda().scatter_(1, actions, 1)
 
     assert xs.size(0)==len(samples)
     return xs, actions, ys
-
-# Preprocess is done in the Env class
-# class Preprocessor:
-#     """Preprocessor base class.
-
-#     This is a suggested interface for the preprocessing steps. You may
-#     implement any of these functions. Feel free to add or change the
-#     interface to suit your needs.
-
-#     Preprocessor can be used to perform some fixed operations on the
-#     raw state from an environment. For example, in ConvNet based
-#     networks which use image as the raw state, it is often useful to
-#     convert the image to greyscale or downsample the image.
-
-#     Preprocessors are implemented as class so that they can have
-#     internal state. This can be useful for things like the
-#     AtariPreproccessor which maxes over k frames.
-
-#     If you're using internal states, such as for keeping a sequence of
-#     inputs like in Atari, you should probably call reset when a new
-#     episode begins so that state doesn't leak in from episode to
-#     episode.
-#     """
-
-#     def process_state_for_network(self, state):
-#         """Preprocess the given state before giving it to the network.
-
-#         Should be called just before the action is selected.
-
-#         This is a different method from the process_state_for_memory
-#         because the replay memory may require a different storage
-#         format to reduce memory usage. For example, storing images as
-#         uint8 in memory is a lot more efficient thant float32, but the
-#         networks work better with floating point images.
-
-#         Parameters
-#         ----------
-#         state: np.ndarray
-#           Generally a numpy array. A single state from an environment.
-
-#         Returns
-#         -------
-#         processed_state: np.ndarray
-#           Generally a numpy array. The state after processing. Can be
-#           modified in anyway.
-
-#         """
-#         return state
-
-#     def process_state_for_memory(self, state):
-#         """Preprocess the given state before giving it to the replay memory.
-
-#         Should be called just before appending this to the replay memory.
-
-#         This is a different method from the process_state_for_network
-#         because the replay memory may require a different storage
-#         format to reduce memory usage. For example, storing images as
-#         uint8 in memory and the network expecting images in floating
-#         point.
-
-#         Parameters
-#         ----------
-#         state: np.ndarray
-#           A single state from an environmnet. Generally a numpy array.
-
-#         Returns
-#         -------
-#         processed_state: np.ndarray
-#           Generally a numpy array. The state after processing. Can be
-#           modified in any manner.
-
-#         """
-#         return state
-
-#     def process_batch(self, samples):
-#         """Process batch of samples.
-
-#         If your replay memory storage format is different than your
-#         network input, you may want to apply this function to your
-#         sampled batch before running it through your update function.
-
-#         Parameters
-#         ----------
-#         samples: list(tensorflow_rl.core.Sample)
-#           List of samples to process
-
-#         Returns
-#         -------
-#         processed_samples: list(tensorflow_rl.core.Sample)
-#           Samples after processing. Can be modified in anyways, but
-#           the list length will generally stay the same.
-#         """
-#         return samples
-
-#     def process_reward(self, reward):
-#         """Process the reward.
-
-#         Useful for things like reward clipping. The Atari environments
-#         from DQN paper do this. Instead of taking real score, they
-#         take the sign of the delta of the score.
-
-#         Parameters
-#         ----------
-#         reward: float
-#           Reward to process
-
-#         Returns
-#         -------
-#         processed_reward: float
-#           The processed reward
-#         """
-#         return reward
-
-#     def reset(self):
-#         """Reset any internal state.
-
-#         Will be called at the start of every new episode. Makes it
-#         possible to do history snapshots.
-#         """
-#         pass

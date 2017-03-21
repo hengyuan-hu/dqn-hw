@@ -64,7 +64,7 @@ class Environment(object):
         if reward != 0.0:
             reward = 1.0 if reward > 0 else -1.0
 
-        return np.array(self.frames_queue), reward, self.end, infor
+        return np.array(self.frames_queue), reward# , self.end, info
 
     def close(self):
         self.env.close()

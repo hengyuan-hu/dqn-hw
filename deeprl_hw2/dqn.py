@@ -1,4 +1,5 @@
 """Main DQN agent."""
+import time
 import copy
 import torch
 import torch.nn
@@ -6,6 +7,8 @@ from torch.autograd import Variable
 import numpy as np
 import utils
 from policy import GreedyEpsilonPolicy
+import core
+
 
 class DQNAgent(object):
     """Class implementing DQN.
@@ -54,7 +57,8 @@ class DQNAgent(object):
                  target_update_freq,
                  # num_burn_in,
                  # train_freq,
-                 batch_size):
+                 # batch_size
+    ):
         self.online_q_net = q_network
         self.target_q_net = copy.deepcopy(q_network)
 
@@ -62,7 +66,7 @@ class DQNAgent(object):
         self.gamma = gamma
         self.target_update_freq = target_update_freq
         # self.num_burn_in = num_burn_in
-        self.batch_size = batch_size
+        # self.batch_size = batch_size
 
     def burn_in(self, env, num_burn_in):
         policy = GreedyEpsilonPolicy(1) # uniform policy
@@ -88,7 +92,7 @@ class DQNAgent(object):
 
     def _online_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
-        q_vals = self.online_q_net(torch.Variable(states, volatile=True)).data
+        q_vals = self.online_q_net(Variable(states, volatile=True)).data
         utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
         return q_vals
 
@@ -100,31 +104,21 @@ class DQNAgent(object):
         policy: policy takes Q-values and return actions
         returns:  selected action, 1-d array (batch_size,)
         """
+        # TODO: not efficient, avoid compute q val if greedy
         q_vals = self._online_q_values(states)
-        utils.assert_eq(q_vals.dim(), 2) # [batch_size, num_actions]
-        # q_vals is a torch.cuda.FloatTensor
+        utils.assert_eq(q_vals.size()[0], 1)
+        q_vals = q_vals.view(q_vals.size()[1])
         action = policy(q_vals.cpu().numpy())
         return action
 
+    def _update_q_net(self, batch_size):
+        samples = self.replay_memory.sample(batch_size)
+        x, a, y = core.samples_to_minibatch(samples, self)
+        loss = self.online_q_net.train_step(x, a, y)
+        return loss
 
-    # def update_policy(self):
-    #     """Update your policy.
-
-    #     Behavior may differ based on what stage of training you're
-    #     in. If you're in training mode then you should check if you
-    #     should update your network parameters based on the current
-    #     step and the value you set for train_freq.
-
-    #     Inside, you'll want to sample a minibatch, calculate the
-    #     target values, update your network, and then update your
-    #     target values.
-
-    #     You might want to return the loss and other metrics as an
-    #     output. They can help you monitor how training is going.
-    #     """
-    #     pass
-
-    def train(self, env, num_iterations, max_episode_length=None):
+    def train(self, env, policy, batch_size, num_iters, log_file):
+        # , max_episode_length=None):
         """Fit your model to the provided environment.
 
         Its a good idea to print out things like loss, average reward,
@@ -149,9 +143,35 @@ class DQNAgent(object):
           How long a single episode should last before the agent
           resets. Can help exploration.
         """
+        assert len(self.replay_memory) > 0, 'no burn in memory'
+        freq_avg_rewards = 1000
+        rewards = np.zeros(freq_avg_rewards)
 
+        state_gpu = torch.cuda.FloatTensor(
+            1, env.num_frames, env.frame_size, env.frame_size)
+        state = env.reset() # always start from new episode
 
+        t = time.time()
+        for i in xrange(num_iters):
+            if env.end:
+                state = env.reset()
+            state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
+            action = self.select_action(state_gpu, policy)
+            next_state, reward = env.step(action)
+            self.replay_memory.append(state, action, reward, next_state, env.end)
+            state = next_state
+            self._update_q_net(batch_size)
+            if (i+1) % self.target_update_freq:
+                self.target_q_net = copy.deepcopy(self.online_q_net)
 
+            rewards[i % freq_avg_rewards] = reward
+            if (i+1) % freq_avg_rewards == 0:
+                log = 'iter: %d,  avg reward: %s' % (i+1, rewards.mean())
+                log += '\ttime taken: %s' % (time.time() - t)
+                print log
+                log_file.write(log+'\n')
+                log_file.flush()
+                t = time.time()
 
     def eval(self, env, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
@@ -166,3 +186,4 @@ class DQNAgent(object):
         You can also call the render function here if you want to
         visually inspect your policy.
         """
+        pass
