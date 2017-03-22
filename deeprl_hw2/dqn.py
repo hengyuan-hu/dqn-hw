@@ -156,9 +156,9 @@ class DQNAgent(object):
                 log += '\tTime taken: %s' % (time.time() - t)
                 print '---memory size: ', len(self.replay_memory)
                 print '---policy eps: ', policy.epsilon
-
-                if (i+1) / eval_args['eval_per_iter'] > last_eval_milestone:
-                    last_eval_milestone = (i+1) / eval_args['eval_per_iter']
+                milestone = (i+1) / eval_args['eval_per_iter']
+                if milestone > last_eval_milestone:
+                    last_eval_milestone = milestone
                     log += '\n'
                     log += self.eval(
                         eval_args['eval_env'], eval_args['eval_policy'],
