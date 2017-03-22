@@ -8,7 +8,7 @@ import numpy as np
 import utils
 from policy import GreedyEpsilonPolicy
 import core
-
+from collections import Counter
 
 class DQNAgent(object):
     """Class implementing DQN.
@@ -41,10 +41,11 @@ class DQNAgent(object):
       Before you begin updating the Q-network your replay memory has
       to be filled up with some number of samples. This number says
       how many.
-    train_freq: int
-      How often you actually update your Q-Network. Sometimes
-      stability is improved if you collect a couple samples for your
-      replay memory, for every Q-network update that you run.
+    use_double_dqn: boolean
+      Whether to use target q or online q to calculate next_state action
+      during sampling.
+    use_double_q: boolean
+      Whether to occasionally flip target and online. Only for Linear
     batch_size: int
       How many samples in each minibatch.
     """
@@ -53,7 +54,8 @@ class DQNAgent(object):
                  memory,
                  gamma,
                  target_update_freq,
-                 num_burn_in):
+                 num_burn_in,
+                 use_double_dqn=False):
         self.online_q_net = q_network
         self.target_q_net = copy.deepcopy(q_network)
 
@@ -61,6 +63,7 @@ class DQNAgent(object):
         self.gamma = gamma
         self.target_update_freq = target_update_freq
         self.num_burn_in = num_burn_in
+        self.use_double_dqn = use_double_dqn
 
     def _burn_in(self, env):
         policy = GreedyEpsilonPolicy(1) # uniform policy
@@ -85,7 +88,7 @@ class DQNAgent(object):
         utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
         return q_vals
 
-    def _online_q_values(self, states):
+    def online_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
         q_vals = self.online_q_net(Variable(states, volatile=True)).data
         utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
@@ -100,7 +103,7 @@ class DQNAgent(object):
         returns:  selected action, 1-d array (batch_size,)
         """
         # TODO: not efficient, avoid compute q val if greedy
-        q_vals = self._online_q_values(states)
+        q_vals = self.online_q_values(states)
         utils.assert_eq(q_vals.size()[0], 1)
         q_vals = q_vals.view(q_vals.size()[1])
         action = policy(q_vals.cpu().numpy())
@@ -146,6 +149,7 @@ class DQNAgent(object):
         num_episodes = 0
         rewards = []
         losses = []
+
         t = time.time()
         for i in xrange(num_iters):
             if env.end:
@@ -159,7 +163,6 @@ class DQNAgent(object):
                 milestone = (i+1) / eval_args['eval_per_iter']
                 if milestone > last_eval_milestone:
                     last_eval_milestone = milestone
-                    log += '\n'
                     log += self.eval(
                         eval_args['eval_env'], eval_args['eval_policy'],
                         eval_args['num_episodes'])
@@ -183,6 +186,8 @@ class DQNAgent(object):
 
             if (i+1) % self.target_update_freq:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
+            if (i+1) % (num_iters/4)==0:
+                torch.save(self.online_q_net.state_dict(), 'net_%d.pth'%((i+1)/(num_iters/3)))
 
     def eval(self, env, policy, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
@@ -192,7 +197,8 @@ class DQNAgent(object):
         """
         state_gpu = torch.cuda.FloatTensor(
             1, env.num_frames, env.frame_size, env.frame_size)
-        state = env.reset() # TODO: em???
+        state = env.reset() 
+        actions = np.zeros(env.num_actions)
 
         total_rewards = np.zeros(num_episodes)
         eps_idx = 0
@@ -200,6 +206,7 @@ class DQNAgent(object):
         while eps_idx < num_episodes:
             state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
             action = self.select_action(state_gpu, policy)
+            actions[action] += 1
             state, _  = env.step(action)
 
             if env.end:
@@ -211,17 +218,19 @@ class DQNAgent(object):
                     state = env.reset()
                 eps_idx += 1
 
-        eps_log = '>>>Eval: avg total rewards: %s' % total_rewards.mean()
+        eps_log = '>>>Eval: avg total rewards: %s\n' % total_rewards.mean()
         log += eps_log
+        log += '>>>Eval: actions dist: %s\n' % list(actions/actions.sum())
         return log
 
-class LinearDQNAgent(DQNAgent):
+class LinearQNAgent(DQNAgent):
     def __init__(self,
                  q_network,
                  memory,
                  gamma,
                  target_update_freq,
                  num_burn_in,
+                 use_double_q=False,
                  dumb=False):
         self.online_q_net = q_network
         self.target_q_net = copy.deepcopy(q_network)
@@ -230,34 +239,11 @@ class LinearDQNAgent(DQNAgent):
         self.gamma = gamma
         self.target_update_freq = target_update_freq
         self.num_burn_in = num_burn_in
+        self.use_double_dqn = False # for sampling
+        self.use_double_q = use_double_q
         self.dumb = dumb
 
     def train(self, env, policy, batch_size, num_iters, log_file, eval_args):
-        # , max_episode_length=None):
-        """Fit your model to the provided environment.
-
-        Its a good idea to print out things like loss, average reward,
-        Q-values, etc to see if your agent is actually improving.
-
-        You should probably also periodically save your network
-        weights and any other useful info.
-
-        This is where you should sample actions from your network,
-        collect experience samples and add them to your replay memory,
-        and update your network parameters.
-
-        Parameters
-        ----------
-        env: gym.Env
-          This is your Atari environment. You should wrap the
-          environment using the wrap_atari_env function in the
-          utils.py
-        num_iterations: int
-          How many samples/updates to perform.
-        max_episode_length: int
-          How long a single episode should last before the agent
-          resets. Can help exploration.
-        """
         state_gpu = torch.cuda.FloatTensor(
             1, env.num_frames, env.frame_size, env.frame_size)
         if not self.dumb:
@@ -267,6 +253,7 @@ class LinearDQNAgent(DQNAgent):
         last_eval_milestone = 0
         rewards = []
         losses = []
+
         t = time.time()
         for i in xrange(num_iters):
             if env.end:
@@ -299,7 +286,7 @@ class LinearDQNAgent(DQNAgent):
             action = self.select_action(state_gpu, policy)
             next_state, reward = env.step(action)
 
-            # dump => train on only current sample
+            # dumb => train on only current sample
             if not self.dumb:
                 self.replay_memory.append(state, action, reward, next_state, env.end)
                 loss = self._update_q_net(batch_size)
@@ -310,7 +297,11 @@ class LinearDQNAgent(DQNAgent):
             state = next_state
             losses.append(loss)
             rewards.append(reward)
-
-            # dump => no target fixing, always sync
-            if self.dumb or (i+1) % self.target_update_freq:
-                self.target_q_net = copy.deepcopy(self.online_q_net)
+            if self.use_double_q and np.random.uniform() > 0.5:
+                # flip networks
+                self.target_q_net, self.online_q_net = \
+                    self.online_q_net, self.target_q_net
+            else:
+                # dumb => no target fixing, always sync
+                if self.dumb or (i+1) % self.target_update_freq:
+                    self.target_q_net = copy.deepcopy(self.online_q_net)

@@ -154,7 +154,9 @@ def samples_to_minibatch(samples, q_agent):
     convert [sample.state] to input tensor xs
     compute target tensor ys according to whether terminate and q_network
     it is possible to have only one kind of sample (all term/non-term)
-
+    double_dq:
+        True: y = r + targetQ(s', argmax_a'(onlineQ(s',a')))
+        False: y = r + max_a'(onlineQ(s',a'))
     return: Tensors that can be directly used by q_network
         xs: (b, ?) FloatTensor
         as: (b, n_actions) one-hot FloatTensor
@@ -181,12 +183,20 @@ def samples_to_minibatch(samples, q_agent):
     ys = torch.from_numpy(ys).cuda()
     ends = torch.from_numpy(ends).cuda()
 
-    q_values = q_agent.target_q_values(next_states) # Tensor (b, n_actions)
-    n_actions = q_values.size(1)
-    max_qs = q_values.max(1)[0] # max returns a pair
-    ys += max_qs.mul_(ends).mul_(q_agent.gamma)
+    target_q_values = q_agent.target_q_values(next_states) # Tensor (b, n_actions)
+    n_actions = target_q_values.size(1)
+    actions_mask = torch.zeros(len(samples), n_actions).cuda()
+    if q_agent.use_double_dqn:
+        online_q_values = q_agent.online_q_values(next_states)
+        next_actions = online_q_values.max(1)[1] # argmax
+        next_actions = actions_mask.scatter_(1, next_actions, 1)
+        print 'next_actions:', next_actions
+        next_qs = target_q_values.mul_(next_actions).sum(1)
+    else:
+        next_qs = target_q_values.max(1)[0] # max returns a pair
+    ys += next_qs.mul_(ends).mul_(q_agent.gamma)
     # convert to one-hot
-    actions = torch.zeros(len(samples), n_actions).cuda().scatter_(1, actions, 1)
+    actions = actions_mask.scatter_(1, actions, 1)
 
     assert xs.size(0)==len(samples)
     return xs, actions, ys
