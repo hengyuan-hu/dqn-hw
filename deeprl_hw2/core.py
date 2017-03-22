@@ -37,11 +37,20 @@ class Sample(object):
     """
     def __init__(self, state, action, reward, next_state, end):
         utils.assert_eq(type(state), type(next_state))
-        self.state = state
+        # merge two states internally and clip to uint8 to save memory
+        last_frame = np.take(next_state, [-1], axis=0)
+        self._merged_frames = np.append(state, last_frame, axis=0).astype(np.uint8)
         self.action = action
         self.reward = reward
-        self.next_state = next_state
         self.end = end
+
+    @property
+    def state(self):
+        return self._merged_frames[:-1].astype(np.float32)
+
+    @property
+    def next_state(self):
+        return self._merged_frames[1:].astype(np.float32)
 
     def __str__(self):
         info = ('S(mean): %3.4f, A: %s, R: %s, NS(mean): %3.4f, End: %s'
