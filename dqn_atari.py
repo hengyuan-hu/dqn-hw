@@ -4,7 +4,7 @@ import argparse
 import os
 import random
 import numpy as np
-import tensorflow
+import tensorflow #TODO: remove this
 # always import env (import cv2) first, to avoid opencv magic
 from deeprl_hw2.env import Environment
 import torch
@@ -56,20 +56,25 @@ def main():
     parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
     parser.add_argument('--output', default='experiments/test0')
     parser.add_argument('--seed', default=6666999, type=int, help='Random seed')
-    parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
+    parser.add_argument('--lr', default=0.00025, type=float, help='learning rate')
+    parser.add_argument('--alpha', default=0.95, type=float, help='squared gradient momentum for RMS prop')
+    parser.add_argument('--momentum', default=0.95, type=float, help='gradient momentum')
+    parser.add_argument('--rms_eps', default=0.01, type=float, help='min squared gradient for RMS prop')
     parser.add_argument('--q_net', default='', type=str, help='load pretrained q net')
     parser.add_argument('--gamma', default=0.99, type=float, help='discount factor')
     parser.add_argument('--num_iters', default=5000000, type=int)
+    # parser.add_argument('--replay_buffer_size', default=1000000, type=int)
     parser.add_argument('--replay_buffer_size', default=1000000, type=int)
     parser.add_argument('--num_frames', default=4, type=int, help='nframe, QNet input')
     parser.add_argument('--frame_size', default=84, type=int)
     parser.add_argument('--target_q_sync_interval', default=10000, type=int)
     parser.add_argument('--batch_size', default=32, type=int)
+    parser.add_argument('--update_freq', default=4, type=int)
     parser.add_argument('--train_start_eps', default=1.0, type=float)
     parser.add_argument('--train_final_eps', default=0.1, type=float)
     parser.add_argument('--train_eps_num_steps', default=1000000, type=int)
     parser.add_argument('--eval_eps', default=0.05, type=float)
-    parser.add_argument('--num_burn_in', default=300, type=float)
+    parser.add_argument('--num_burn_in', default=50000, type=float)
 
     args = parser.parse_args()
     # args.output = get_output_folder(args.output, args.env)
@@ -91,11 +96,18 @@ if __name__ == '__main__':
 
     env = Environment(args.env, args.num_frames, args.frame_size)
     eval_env = Environment(args.env, args.num_frames,
-                           args.frame_size, record=True, mnt_path='dqn')
-    q_net = LinearQNetwork(args.num_frames, args.frame_size,
-                           env.num_actions, args.lr, args.q_net)
-    q_net = QNetwork(args.num_frames, args.frame_size,
-                     env.num_actions, args.lr, args.q_net)
+                           args.frame_size, record=True, mnt_path='test')
+    optim_args = {
+        'lr': args.lr,
+        'alpha': args.alpha,
+        #'momentum': args.momentum, # only available in dev version
+        'eps': args.rms_eps
+    }
+    q_net = LinearQNetwork(args.num_frames, args.frame_size, env.num_actions,
+                           args.update_freq, optim_args, args.q_net)
+    q_net = QNetwork(args.num_frames, args.frame_size, env.num_actions,
+                     args.update_freq, optim_args, args.q_net)
+
     replay_memory = ReplayMemory(args.replay_buffer_size)
     train_policy = LinearDecayGreedyEpsilonPolicy(
         args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
@@ -123,3 +135,5 @@ if __name__ == '__main__':
     # args.num_iters = 300
     agent.train(env, train_policy, args.batch_size, args.num_iters,
                 train_log, eval_args)
+
+    torch.save(q_net.state_dict(), 'net.pth')

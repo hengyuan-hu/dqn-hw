@@ -6,7 +6,7 @@ import utils
 
 
 class QNetwork(nn.Module):
-    def __init__(self, num_frames, frame_size, num_actions, lr, net_file=None):
+    def __init__(self, num_frames, frame_size, num_actions, update_freq, optim_args, net_file=None):
         """
         num_frames: i.e. num of channels of input
         frame_size: int, frame has to be square for simplicity
@@ -34,7 +34,10 @@ class QNetwork(nn.Module):
         self.fc = fc
         utils.init_net(self, net_file)
         self.cuda()
-        self.optim = torch.optim.RMSprop(self.parameters(), lr)
+        self.optim = torch.optim.RMSprop(self.parameters(), **optim_args)
+
+        self.update_freq = update_freq
+        self.step = 0
 
     def forward(self, x):
         y = self.conv(x)
@@ -52,22 +55,31 @@ class QNetwork(nn.Module):
         return err
 
     def train_step(self, x, a, y):
-        utils.assert_zero_grads(self.parameters())
+        """accum gradients and apply every update_freq"""
+        if self.step==0:
+            utils.assert_zero_grads(self.parameters())
+        self.step = (self.step+1) % self.update_freq
         err = self.loss(x, a, y)
         err.backward()
-        self.optim.step()
-        self.zero_grad()
+
+        if self.step==0:
+            self.optim.step()
+            self.zero_grad()
+
         return err.data[0]
 
 
 class LinearQNetwork(nn.Module):
-    def __init__(self, num_frames, frame_size, num_actions, lr, net_file=None):
+    def __init__(self, num_frames, frame_size, num_actions, update_freq, optim_args, net_file=None):
         super(LinearQNetwork, self).__init__()
 
         self.fc = nn.Linear(num_frames*frame_size*frame_size, num_actions)
         utils.init_net(self, net_file)
         self.cuda()
-        self.optim = torch.optim.RMSprop(self.parameters(), lr)
+        self.optim = torch.optim.RMSprop(self.parameters(), **optim_args)
+
+        self.update_freq = update_freq
+        self.step = 0
 
     def forward(self, x):
         y = x.view(x.size(0), -1)
@@ -84,11 +96,17 @@ class LinearQNetwork(nn.Module):
         return err
 
     def train_step(self, x, a, y):
-        utils.assert_zero_grads(self.parameters())
+        """accum gradients and apply every update_freq"""
+        if self.step==0:
+            utils.assert_zero_grads(self.parameters())
+        self.step = (self.step+1) % self.update_freq
         err = self.loss(x, a, y)
         err.backward()
-        self.optim.step()
-        self.zero_grad()
+
+        if self.step==0:
+            self.optim.step()
+            self.zero_grad()
+
         return err.data[0]
 
 if __name__ == '__main__':
