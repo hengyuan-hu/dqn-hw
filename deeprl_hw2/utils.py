@@ -25,7 +25,7 @@ def assert_frozen(module):
 def weights_init(m):
     """custom weights initialization called on net_g and net_f."""
     classname = m.__class__.__name__
-    if classname.find('Conv') != -1 or classname.find('Linear') != -1:
+    if classname.find('Conv') != -1 or classname.find('Linear') != -1 and classname.find('Q') == -1:
         m.weight.data.normal_(0.0, 0.02)
     elif classname.find('BatchNorm') != -1:
         m.weight.data.normal_(1.0, 0.02)

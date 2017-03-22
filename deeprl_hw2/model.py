@@ -60,6 +60,37 @@ class QNetwork(nn.Module):
         return err.data[0]
 
 
+class LinearQNetwork(nn.Module):
+    def __init__(self, num_frames, frame_size, num_actions, lr, net_file=None):
+        super(LinearQNetwork, self).__init__()
+
+        self.fc = nn.Linear(num_frames*frame_size*frame_size, num_actions)
+        utils.init_net(self, net_file)
+        self.cuda()
+        self.optim = torch.optim.RMSprop(self.parameters(), lr)
+
+    def forward(self, x):
+        y = x.view(x.size(0), -1)
+        y = self.fc(y)
+        utils.assert_eq(y.dim(), 2)
+        return y
+
+    def loss(self, x, a, y):
+        utils.assert_eq(a.dim(), 2)
+        q_vals = self.forward(Variable(x))
+        utils.assert_eq(q_vals.size(), a.size())
+        y_pred = (q_vals * Variable(a)).sum(1)
+        err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
+        return err
+
+    def train_step(self, x, a, y):
+        utils.assert_zero_grads(self.parameters())
+        err = self.loss(x, a, y)
+        err.backward()
+        self.optim.step()
+        self.zero_grad()
+        return err.data[0]
+
 if __name__ == '__main__':
     import copy
 

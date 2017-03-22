@@ -142,6 +142,7 @@ class DQNAgent(object):
             1, env.num_frames, env.frame_size, env.frame_size)
         state = self._burn_in(env)
 
+        last_eval_milestone = 0
         num_episodes = 0
         rewards = []
         losses = []
@@ -156,7 +157,8 @@ class DQNAgent(object):
                 print '---memory size: ', len(self.replay_memory)
                 print '---policy eps: ', policy.epsilon
 
-                if (i+1) % eval_args['eval_per_iter'] == 0:
+                if (i+1) / eval_args['eval_per_iter'] > last_eval_milestone:
+                    last_eval_milestone = (i+1) / eval_args['eval_per_iter']
                     log += '\n'
                     log += self.eval(
                         eval_args['eval_env'], eval_args['eval_policy'],
@@ -213,3 +215,102 @@ class DQNAgent(object):
         log += eps_log
         return log
 
+class LinearDQNAgent(DQNAgent):
+    def __init__(self,
+                 q_network,
+                 memory,
+                 gamma,
+                 target_update_freq,
+                 num_burn_in,
+                 dumb=False):
+        self.online_q_net = q_network
+        self.target_q_net = copy.deepcopy(q_network)
+        if not dumb:
+            self.replay_memory = memory
+        self.gamma = gamma
+        self.target_update_freq = target_update_freq
+        self.num_burn_in = num_burn_in
+        self.dumb = dumb
+
+    def train(self, env, policy, batch_size, num_iters, log_file, eval_args):
+        # , max_episode_length=None):
+        """Fit your model to the provided environment.
+
+        Its a good idea to print out things like loss, average reward,
+        Q-values, etc to see if your agent is actually improving.
+
+        You should probably also periodically save your network
+        weights and any other useful info.
+
+        This is where you should sample actions from your network,
+        collect experience samples and add them to your replay memory,
+        and update your network parameters.
+
+        Parameters
+        ----------
+        env: gym.Env
+          This is your Atari environment. You should wrap the
+          environment using the wrap_atari_env function in the
+          utils.py
+        num_iterations: int
+          How many samples/updates to perform.
+        max_episode_length: int
+          How long a single episode should last before the agent
+          resets. Can help exploration.
+        """
+        state_gpu = torch.cuda.FloatTensor(
+            1, env.num_frames, env.frame_size, env.frame_size)
+        if not self.dumb:
+            state = self._burn_in(env)
+
+        num_episodes = 0
+        last_eval_milestone = 0
+        rewards = []
+        losses = []
+        t = time.time()
+        for i in xrange(num_iters):
+            if env.end:
+                # log and eval
+                num_episodes += 1
+                log = ('Episode: %d, Iter: %d, Reward Sum: %s; Loss: %s\n'
+                       % (num_episodes, i+1, sum(rewards), np.mean(losses)))
+                log += '\tTime taken: %s' % (time.time() - t)
+                if not self.dumb:
+                    print '---memory size: ', len(self.replay_memory)
+                print '---policy eps: ', policy.epsilon
+
+                if (i+1) / eval_args['eval_per_iter'] > last_eval_milestone:
+                    last_eval_milestone = (i+1) / eval_args['eval_per_iter']
+                    log += '\n'
+                    log += self.eval(
+                        eval_args['eval_env'], eval_args['eval_policy'],
+                        eval_args['num_episodes'])
+
+                print log
+                log_file.write(log+'\n')
+                log_file.flush()
+
+                # main task ...
+                t = time.time()
+                state = env.reset()
+                rewards = []
+
+            state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
+            action = self.select_action(state_gpu, policy)
+            next_state, reward = env.step(action)
+
+            # dump => train on only current sample
+            if not self.dumb:
+                self.replay_memory.append(state, action, reward, next_state, env.end)
+                loss = self._update_q_net(batch_size)
+            else:
+                samples = [core.Sample(state, action, reward, next_state, env.end)]
+                x, a, y = core.samples_to_minibatch(samples, self)
+                loss = self.online_q_net.train_step(x, a, y)
+            state = next_state
+            losses.append(loss)
+            rewards.append(reward)
+
+            # dump => no target fixing, always sync
+            if self.dumb or (i+1) % self.target_update_freq:
+                self.target_q_net = copy.deepcopy(self.online_q_net)

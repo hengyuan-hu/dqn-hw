@@ -8,9 +8,9 @@ import tensorflow
 # always import env (import cv2) first, to avoid opencv magic
 from deeprl_hw2.env import Environment
 import torch
-from deeprl_hw2.dqn import DQNAgent
+from deeprl_hw2.dqn import DQNAgent, LinearDQNAgent
 from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
-from deeprl_hw2.model import QNetwork
+from deeprl_hw2.model import QNetwork, LinearQNetwork
 from deeprl_hw2.core import ReplayMemory, samples_to_minibatch
 
 
@@ -92,6 +92,8 @@ if __name__ == '__main__':
     env = Environment(args.env, args.num_frames, args.frame_size)
     eval_env = Environment(args.env, args.num_frames,
                            args.frame_size, record=True, mnt_path='dqn')
+    q_net = LinearQNetwork(args.num_frames, args.frame_size,
+                           env.num_actions, args.lr, args.q_net)
     q_net = QNetwork(args.num_frames, args.frame_size,
                      env.num_actions, args.lr, args.q_net)
     replay_memory = ReplayMemory(args.replay_buffer_size)
@@ -99,6 +101,12 @@ if __name__ == '__main__':
         args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
     eval_policy = GreedyEpsilonPolicy(args.eval_eps)
 
+    agent = LinearDQNAgent(q_net,
+                           replay_memory,
+                           args.gamma,
+                           args.target_q_sync_interval,
+                           args.num_burn_in,
+                           dumb=True)
     agent = DQNAgent(q_net,
                      replay_memory,
                      args.gamma,
@@ -108,7 +116,7 @@ if __name__ == '__main__':
     train_log = open(os.path.join(args.output, 'train_log.txt'), 'w')
     eval_args = {
         'eval_env': eval_env,
-        'eval_per_iter': 10000,
+        'eval_per_iter': 100000,
         'eval_policy': eval_policy,
         'num_episodes': 20
     }
