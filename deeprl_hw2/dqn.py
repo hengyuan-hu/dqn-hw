@@ -144,15 +144,17 @@ class DQNAgent(object):
 
         num_episodes = 0
         rewards = []
+        losses = []
         t = time.time()
         for i in xrange(num_iters):
             if env.end:
                 # log and eval
                 num_episodes += 1
-                log = ('Episode: %d, Iter: %d, Reward Sum: %s\n'
-                       % (num_episodes, i+1, sum(rewards)))
+                log = ('Episode: %d, Iter: %d, Reward Sum: %s; Loss: %s\n'
+                       % (num_episodes, i+1, sum(rewards), np.mean(losses)))
                 log += '\tTime taken: %s' % (time.time() - t)
-                rewards = []
+                print '---memory size: ', len(self.replay_memory)
+                print '---policy eps: ', policy.epsilon
 
                 if num_episodes % eval_args['eval_per_eps'] == 0:
                     log += '\n'
@@ -162,20 +164,22 @@ class DQNAgent(object):
                 print log
                 log_file.write(log+'\n')
                 log_file.flush()
-                t = time.time()
 
                 # main task ...
+                t = time.time()
                 state = env.reset()
+                rewards = []
 
             state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
             action = self.select_action(state_gpu, policy)
             next_state, reward = env.step(action)
             self.replay_memory.append(state, action, reward, next_state, env.end)
             state = next_state
-            self._update_q_net(batch_size)
+            losses.append(self._update_q_net(batch_size))
+            rewards.append(reward)
+
             if (i+1) % self.target_update_freq:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
-            rewards.append(reward)
 
     def eval(self, env, policy, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
@@ -197,7 +201,6 @@ class DQNAgent(object):
                 total_rewards[eps_idx] = sum(rewards)
                 eps_log = ('>>>Eval: [%d/%d], rewards: %s\n' %
                            (eps_idx+1, num_episodes, total_rewards[eps_idx]))
-                # print eps_log
                 log += eps_log
                 eps_idx += 1
                 rewards = []
@@ -208,6 +211,5 @@ class DQNAgent(object):
             rewards.append(reward)
 
         eps_log = '>>>Eval: avg total rewards: %s' % total_rewards.mean()
-        # print eps_log
         log += eps_log
         return log

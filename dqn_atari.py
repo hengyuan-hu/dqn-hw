@@ -78,15 +78,12 @@ def main():
     with open(os.path.join(args.output, 'configs.txt'), 'w') as f:
         print >>f, args
 
-    #TODO: set random seed
     random.seed(666666)
     np.random.seed(99999)
     torch.manual_seed(77777)
     torch.cuda.manual_seed(555774)
-
     return args
-    # create your DQN agent, create your model, etc.
-    # then you can run your fit method.
+
 
 if __name__ == '__main__':
     args = main()

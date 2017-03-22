@@ -24,10 +24,10 @@ class GreedyEpsilonPolicy(object):
         return: action, int
         """
         utils.assert_eq(len(q_values.shape), 1)
-        num_actions = q_values.shape[0]
         if self._greedy():
             action = q_values.argmax()
         else:
+            num_actions = q_values.shape[0]
             action = np.random.randint(0, num_actions)
         return action
 
