@@ -175,8 +175,7 @@ def samples_to_minibatch(samples, q_agent):
     q_values = q_agent.target_q_values(next_states) # Tensor (b, n_actions)
     n_actions = q_values.size(1)
     max_qs = q_values.max(1)[0] # max returns a pair
-    ys += max_qs.mul(q_agent.gamma).mul(ends)
-
+    ys += max_qs.mul_(ends).mul_(q_agent.gamma)
     # convert to one-hot
     actions = torch.zeros(len(samples), n_actions).cuda().scatter_(1, actions, 1)
 
