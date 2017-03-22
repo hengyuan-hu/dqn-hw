@@ -4,7 +4,7 @@ from gym import wrappers
 import cv2
 from collections import deque
 import numpy as np
-#from scipy.misc import imsave
+from scipy.misc import imsave
 
 def preprocess_frame(observ, output_size):
     # to grayscale, resize, scale to [0, 1]
@@ -13,14 +13,17 @@ def preprocess_frame(observ, output_size):
     output = cv2.resize(gray, (output_size, output_size))
     output = output.astype(np.float32)
     output[output>0] = 1.0
-    # imsave('frame.png', output)
+    imsave('frame.png', output)
     return output
+
+SPACE_INVADERS_INIT_LIVES = 3
 
 class Environment(object):
     def __init__(self, name, num_frames, frame_size, record=False, mnt_path=None,
-                 video_callable=None, write_upon_reset=True):
+                 video_callable=None, write_upon_reset=True, negative_dead_reward=False):
         assert num_frames>0
         self.env = gym.make(name)
+        self.name = name
         if record:
             def capture_all(episode_id):
                 return True
@@ -39,6 +42,7 @@ class Environment(object):
         self.end = True
         self.total_reward = 0.0
         self.frames_queue = deque(maxlen=4)
+        self.negative_dead_reward = negative_dead_reward
         # leave reset to user, as in env
 
     def reset(self):
@@ -51,6 +55,9 @@ class Environment(object):
         initial_state = self.env.reset()
         initial_state = preprocess_frame(initial_state, self.frame_size)
         self.frames_queue.append(initial_state)
+
+        if self.negative_dead_reward and self.name == 'SpaceInvaders-v0':
+            self.lives = SPACE_INVADERS_INIT_LIVES
 
         return np.array(self.frames_queue)
 
@@ -77,7 +84,12 @@ class Environment(object):
         # clip reward
         reward = np.sign(reward)
 
-        return np.array(self.frames_queue), reward# , self.end, info
+        # hack reward to be negative if life lost
+        if self.negative_dead_reward and self.name=='SpaceInvaders-v0' and info['ale.lives']<self.lives:
+            reward = -1.0
+            self.lives = info['ale.lives']
+
+        return np.array(self.frames_queue), reward#, self.end, info
 
     def close(self):
         self.env.close()
@@ -87,3 +99,11 @@ class Environment(object):
 
 if __name__ == '__main__':
      env = gym.make('SpaceInvaders-v0')
+     """{
+         0: 'Noop',
+         1: 'Fire',
+         2: 'Right',
+         3: 'Left',
+         4: 'RightFire',
+         5: 'LeftFire'
+     }"""

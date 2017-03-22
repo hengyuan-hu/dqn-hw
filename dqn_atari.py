@@ -8,7 +8,7 @@ import tensorflow #TODO: remove this
 # always import env (import cv2) first, to avoid opencv magic
 from deeprl_hw2.env import Environment
 import torch
-from deeprl_hw2.dqn import DQNAgent, LinearDQNAgent
+from deeprl_hw2.dqn import DQNAgent, LinearQNAgent
 from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
 from deeprl_hw2.model import QNetwork, LinearQNetwork
 from deeprl_hw2.core import ReplayMemory, samples_to_minibatch
@@ -54,7 +54,6 @@ def get_output_folder(parent_dir, env_name):
 def main():
     parser = argparse.ArgumentParser(description='Run DQN on Atari')
     parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
-    parser.add_argument('--output', default='experiments/test0')
     parser.add_argument('--seed', default=6666999, type=int, help='Random seed')
     parser.add_argument('--lr', default=0.00025, type=float, help='learning rate')
     parser.add_argument('--alpha', default=0.95, type=float, help='squared gradient momentum for RMS prop')
@@ -63,7 +62,6 @@ def main():
     parser.add_argument('--q_net', default='', type=str, help='load pretrained q net')
     parser.add_argument('--gamma', default=0.99, type=float, help='discount factor')
     parser.add_argument('--num_iters', default=5000000, type=int)
-    # parser.add_argument('--replay_buffer_size', default=1000000, type=int)
     parser.add_argument('--replay_buffer_size', default=1000000, type=int)
     parser.add_argument('--num_frames', default=4, type=int, help='nframe, QNet input')
     parser.add_argument('--frame_size', default=84, type=int)
@@ -75,6 +73,10 @@ def main():
     parser.add_argument('--train_eps_num_steps', default=1000000, type=int)
     parser.add_argument('--eval_eps', default=0.05, type=float)
     parser.add_argument('--num_burn_in', default=50000, type=float)
+    parser.add_argument('--negative_dead_reward', default=True, type=bool,
+                        help='whether dying in SpaceInvaders-v0 will generate a negative reward')
+    parser.add_argument('--output', default='experiments/test0')
+    parser.add_argument('--algorithm', default='double_linear', type=str)
 
     args = parser.parse_args()
     # args.output = get_output_folder(args.output, args.env)
@@ -94,46 +96,60 @@ if __name__ == '__main__':
     args = main()
     torch.backends.cudnn.benckmark = True
 
-    env = Environment(args.env, args.num_frames, args.frame_size)
+    env = Environment(args.env, args.num_frames, args.frame_size, negative_dead_reward=args.negative_dead_reward)
     eval_env = Environment(args.env, args.num_frames,
-                           args.frame_size, record=True, mnt_path='test')
+                           args.frame_size,record=True,
+                           mnt_path=os.path.join(args.output, args.algorithm))
+    replay_memory = ReplayMemory(args.replay_buffer_size)
+    train_policy = LinearDecayGreedyEpsilonPolicy(
+        args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
+    eval_policy = GreedyEpsilonPolicy(args.eval_eps)
     optim_args = {
         'lr': args.lr,
         'alpha': args.alpha,
         #'momentum': args.momentum, # only available in dev version
         'eps': args.rms_eps
     }
-    q_net = LinearQNetwork(args.num_frames, args.frame_size, env.num_actions,
+
+    if 'linear' in args.algorithm:
+        dumb = 'dumb' in args.algorithm
+        use_double_q = 'double' in args.algorithm
+        q_net = LinearQNetwork(args.num_frames, args.frame_size, env.num_actions,
                            args.update_freq, optim_args, args.q_net)
-    q_net = QNetwork(args.num_frames, args.frame_size, env.num_actions,
-                     args.update_freq, optim_args, args.q_net)
-
-    replay_memory = ReplayMemory(args.replay_buffer_size)
-    train_policy = LinearDecayGreedyEpsilonPolicy(
-        args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
-    eval_policy = GreedyEpsilonPolicy(args.eval_eps)
-
-    agent = LinearDQNAgent(q_net,
-                           replay_memory,
-                           args.gamma,
-                           args.target_q_sync_interval,
-                           args.num_burn_in,
-                           dumb=True)
-    agent = DQNAgent(q_net,
-                     replay_memory,
-                     args.gamma,
-                     args.target_q_sync_interval,
-                     args.num_burn_in)
+        agent = LinearQNAgent(q_net,
+                              replay_memory,
+                              args.gamma,
+                              args.target_q_sync_interval,
+                              args.num_burn_in,
+                              use_double_q=use_double_q,
+                              dumb=dumb)
+    elif 'dueling' in args.algorithm:
+        pass
+    elif 'dqn' in args.algorithm:
+        use_double_dqn = 'double' in args.algorithm
+        q_net = QNetwork(args.num_frames, args.frame_size, env.num_actions,
+                         args.update_freq, optim_args, args.q_net)
+        agent = DQNAgent(q_net,
+                         replay_memory,
+                         args.gamma,
+                         args.target_q_sync_interval,
+                         args.num_burn_in,
+                         use_double_dqn=use_double_dqn)
+    else:
+        print 'model not implented'
+        exit(1)
 
     train_log = open(os.path.join(args.output, 'train_log.txt'), 'w')
     eval_args = {
         'eval_env': eval_env,
-        'eval_per_iter': 100000,
+        'eval_per_iter': 10000,
         'eval_policy': eval_policy,
         'num_episodes': 20
     }
     # args.num_iters = 300
     agent.train(env, train_policy, args.batch_size, args.num_iters,
                 train_log, eval_args)
-
-    torch.save(q_net.state_dict(), 'net.pth')
+    log = agent.eval(eval_env, eval_policy, 100)
+    train_log.write(log+'\n')
+    train_log.flush()
+    torch.save(q_net.state_dict(), os.path.join(args.output, 'net_done'))
