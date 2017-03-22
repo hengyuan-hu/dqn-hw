@@ -4,7 +4,7 @@ from gym import wrappers
 import cv2
 from collections import deque
 import numpy as np
-from scipy.misc import imsave
+#from scipy.misc import imsave
 
 def preprocess_frame(observ, output_size):
     # to grayscale, resize, scale to [0, 1]
@@ -33,7 +33,7 @@ class Environment(object):
             # force=True for debug easiness, need care before actual training
             self.env = wrappers.Monitor(self.env, mnt_path, force=True,
                                         video_callable=video_callable,
-                                        write_upon_reset=True)
+                                        write_upon_reset=write_upon_reset)
         self.frame_size = frame_size
         self.num_frames = num_frames
         self.end = True

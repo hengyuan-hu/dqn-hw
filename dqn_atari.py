@@ -108,7 +108,7 @@ if __name__ == '__main__':
     train_log = open(os.path.join(args.output, 'train_log.txt'), 'w')
     eval_args = {
         'eval_env': eval_env,
-        'eval_per_eps': 50,
+        'eval_per_iter': 10000,
         'eval_policy': eval_policy,
         'num_episodes': 20
     }

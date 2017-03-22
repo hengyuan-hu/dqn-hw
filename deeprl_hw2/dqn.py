@@ -156,7 +156,7 @@ class DQNAgent(object):
                 print '---memory size: ', len(self.replay_memory)
                 print '---policy eps: ', policy.epsilon
 
-                if num_episodes % eval_args['eval_per_eps'] == 0:
+                if (i+1) % eval_args['eval_per_iter'] == 0:
                     log += '\n'
                     log += self.eval(
                         eval_args['eval_env'], eval_args['eval_policy'],
@@ -212,3 +212,4 @@ class DQNAgent(object):
         eps_log = '>>>Eval: avg total rewards: %s' % total_rewards.mean()
         log += eps_log
         return log
+
