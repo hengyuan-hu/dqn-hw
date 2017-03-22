@@ -48,7 +48,7 @@ class QNetwork(nn.Module):
         q_vals = self.forward(Variable(x))
         utils.assert_eq(q_vals.size(), a.size())
         y_pred = (q_vals * Variable(a)).sum(1)
-        err = nn.functional.smooth_l1_loss(y_pred, Variable(y), False)
+        err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
         return err
 
     def train_step(self, x, a, y):
