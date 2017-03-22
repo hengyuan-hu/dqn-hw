@@ -4,22 +4,36 @@ from gym import wrappers
 import cv2
 from collections import deque
 import numpy as np
+from scipy.misc import imsave
 
 def preprocess_frame(observ, output_size):
     # to grayscale, resize, scale to [0, 1]
     # !!! NO CROP (different from original)
     gray = cv2.cvtColor(observ, cv2.COLOR_RGB2GRAY)
     output = cv2.resize(gray, (output_size, output_size))
-    output = output.astype(np.float32) / 255.0
+    output = output.astype(np.float32)
+    output[output>0] = 1.0
+    # imsave('frame.png', output)
     return output
 
-
 class Environment(object):
-    def __init__(self, name, num_frames, frame_size, mnt_path='./monitor'):
+    def __init__(self, name, num_frames, frame_size, record=False, mnt_path=None,
+                 video_callable=None, write_upon_reset=True):
         assert num_frames>0
         self.env = gym.make(name)
-        # force=True for debug easiness, need care before actual training
-        # self.env = wrappers.Monitor(self.env, mnt_path, force=True)
+        if record:
+            def capture_all(episode_id):
+                return True
+            def capture_every_twenty(episode_id):
+                return (episode_id+1) % 20==0
+            if mnt_path is None:
+                mnt_path = './monitor/'
+            if video_callable is None:
+                video_callable = capture_every_twenty
+            # force=True for debug easiness, need care before actual training
+            self.env = wrappers.Monitor(self.env, mnt_path, force=True,
+                                        video_callable=video_callable,
+                                        write_upon_reset=True)
         self.frame_size = frame_size
         self.num_frames = num_frames
         self.end = True
@@ -61,8 +75,7 @@ class Environment(object):
         self.total_reward += reward
 
         # clip reward
-        if reward != 0.0:
-            reward = 1.0 if reward > 0 else -1.0
+        reward = np.sign(reward)
 
         return np.array(self.frames_queue), reward# , self.end, info
 

@@ -159,7 +159,8 @@ class DQNAgent(object):
                 if num_episodes % eval_args['eval_per_eps'] == 0:
                     log += '\n'
                     log += self.eval(
-                        env, eval_args['eval_policy'], eval_args['num_episodes'])
+                        eval_args['eval_env'], eval_args['eval_policy'],
+                        eval_args['num_episodes'])
 
                 print log
                 log_file.write(log+'\n')
@@ -192,23 +193,21 @@ class DQNAgent(object):
         state = env.reset() # TODO: em???
 
         total_rewards = np.zeros(num_episodes)
-        rewards = []
         eps_idx = 0
         log = ''
         while eps_idx < num_episodes:
+            state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
+            action = self.select_action(state_gpu, policy)
+            state, _  = env.step(action)
+
             if env.end:
-                state = env.reset()
-                total_rewards[eps_idx] = sum(rewards)
+                total_rewards[eps_idx] = env.total_reward
                 eps_log = ('>>>Eval: [%d/%d], rewards: %s\n' %
                            (eps_idx+1, num_episodes, total_rewards[eps_idx]))
                 log += eps_log
+                if eps_idx < num_episodes: # leave reset to next run
+                    state = env.reset()
                 eps_idx += 1
-                rewards = []
-
-            state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
-            action = self.select_action(state_gpu, policy)
-            state, reward = env.step(action)
-            rewards.append(reward)
 
         eps_log = '>>>Eval: avg total rewards: %s' % total_rewards.mean()
         log += eps_log

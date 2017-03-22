@@ -4,7 +4,7 @@ import argparse
 import os
 import random
 import numpy as np
-
+import tensorflow
 # always import env (import cv2) first, to avoid opencv magic
 from deeprl_hw2.env import Environment
 import torch
@@ -90,8 +90,10 @@ if __name__ == '__main__':
     torch.backends.cudnn.benckmark = True
 
     env = Environment(args.env, args.num_frames, args.frame_size)
-    q_net = QNetwork(
-        args.num_frames, args.frame_size, env.num_actions, args.lr, args.q_net)
+    eval_env = Environment(args.env, args.num_frames,
+                           args.frame_size, record=True, mnt_path='dqn')
+    q_net = QNetwork(args.num_frames, args.frame_size,
+                     env.num_actions, args.lr, args.q_net)
     replay_memory = ReplayMemory(args.replay_buffer_size)
     train_policy = LinearDecayGreedyEpsilonPolicy(
         args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
@@ -105,9 +107,10 @@ if __name__ == '__main__':
 
     train_log = open(os.path.join(args.output, 'train_log.txt'), 'w')
     eval_args = {
-        'eval_per_eps': 20,
+        'eval_env': eval_env,
+        'eval_per_eps': 50,
         'eval_policy': eval_policy,
-        'num_episodes': 2
+        'num_episodes': 20
     }
     # args.num_iters = 300
     agent.train(env, train_policy, args.batch_size, args.num_iters,
