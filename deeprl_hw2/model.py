@@ -56,16 +56,13 @@ class QNetwork(nn.Module):
 
     def train_step(self, x, a, y):
         """accum gradients and apply every update_freq"""
-        if self.step==0:
-            utils.assert_zero_grads(self.parameters())
-        self.step = (self.step+1) % self.update_freq
+        self.step = (self.step + 1) % self.update_freq
         err = self.loss(x, a, y)
         err.backward()
 
-        if self.step==0:
+        if self.step == 0:
             self.optim.step()
             self.zero_grad()
-
         return err.data[0]
 
 

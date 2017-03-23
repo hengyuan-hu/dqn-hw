@@ -10,6 +10,7 @@ from policy import GreedyEpsilonPolicy
 import core
 from collections import Counter
 
+
 class DQNAgent(object):
     """Class implementing DQN.
 
@@ -187,7 +188,8 @@ class DQNAgent(object):
             if (i+1) % self.target_update_freq:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
             if (i+1) % (num_iters/4)==0:
-                torch.save(self.online_q_net.state_dict(), 'net_%d.pth'%((i+1)/(num_iters/4)))
+                torch.save(self.online_q_net.state_dict(),
+                           'net_%d.pth' % ((i+1)/(num_iters/4)))
 
     def eval(self, env, policy, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
@@ -197,7 +199,7 @@ class DQNAgent(object):
         """
         state_gpu = torch.cuda.FloatTensor(
             1, env.num_frames, env.frame_size, env.frame_size)
-        state = env.reset() 
+        state = env.reset()
         actions = np.zeros(env.num_actions)
 
         total_rewards = np.zeros(num_episodes)
@@ -222,6 +224,7 @@ class DQNAgent(object):
         log += eps_log
         log += '>>>Eval: actions dist: %s\n' % list(actions/actions.sum())
         return log
+
 
 class LinearQNAgent(DQNAgent):
     def __init__(self,

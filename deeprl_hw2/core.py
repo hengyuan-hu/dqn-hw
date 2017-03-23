@@ -5,6 +5,7 @@ import torch
 import time
 import numpy as np
 
+
 class Sample(object):
     """Represents a reinforcement learning sample.
 
@@ -38,25 +39,24 @@ class Sample(object):
     def __init__(self, state, action, reward, next_state, end):
         utils.assert_eq(type(state), type(next_state))
         # merge two states internally and clip to uint8 to save memory
-        self._packed_frames = np.packbits(np.vstack([state, next_state]).astype(np.uint8, copy=False),axis=0)
+        self._packed_frames = np.packbits(
+            np.vstack([state, next_state]).astype(np.uint8, copy=False),axis=0)
         self.action = action
         self.reward = reward
         self.end = end
 
-    @property
-    def state(self):
-        state = np.unpackbits(self._packed_frames, axis=0)[:4].astype(np.float32, copy=False)
-        return state
-
-    @property
-    def next_state(self):
-        next_state = np.unpackbits(self._packed_frames, axis=0)[4:].astype(np.float32, copy=False)
-        return next_state
+    def get_state_and_next_state(self):
+        unpacked_frames = np.unpackbits(self._packed_frames, axis=0)
+        unpacked_frames = unpacked_frames.astype(np.float32, copy=False)
+        state = unpacked_frames[:4]
+        next_state = unpacked_frames[4:]
+        return state, next_state
 
     def __str__(self):
+        state, next_state = self.get_state_and_next_state()
         info = ('S(mean): %3.4f, A: %s, R: %s, NS(mean): %3.4f, End: %s'
-                % (self.state.mean(), self.action, self.reward,
-                   self.next_state.mean(), self.end))
+                % (state.mean(), self.action, self.reward,
+                   next_state.mean(), self.end))
         return info
 
     def __repr__(self):
@@ -150,6 +150,7 @@ class ReplayMemory(object):
         self.samples = []
         self.oldest_idx = 0
 
+
 def samples_to_minibatch(samples, q_agent):
     """[samples] -> minibatch (xs, as, ys)
     convert [sample.state] to input tensor xs
@@ -163,26 +164,27 @@ def samples_to_minibatch(samples, q_agent):
         as: (b, n_actions) one-hot FloatTensor
         ys: (b, 1) FloatTensor
     """
-    assert len(samples)>0
+    assert len(samples) > 0
     dummy = samples[0]
 
-    xs = np.zeros((len(samples),)+ dummy.state.shape, dtype=np.float32)
-    next_states = np.zeros_like(xs)
+    states = np.zeros((len(samples),) + dummy.state.shape, dtype=np.float32)
+    next_states = np.zeros_like(states)
     ys = np.zeros((len(samples), 1), dtype=np.float32)
     actions = np.zeros_like(ys, dtype=np.int64)
-    ends = np.zeros_like(ys)
+    non_ends = np.zeros_like(ys)
     for i, s in enumerate(samples):
-        xs[i] = s.state
-        next_states[i] = s.next_state
+        states[i], next_states[i] = s.get_state_and_next_state()
+        assert (states[i] == s.state).all()
+        assert (next_states[i] == s.next_state).all()
         ys[i] = s.reward
         actions[i] = s.action
-        ends[i] = 0.0 if s.end else 1.0
+        non_ends[i] = 0.0 if s.end else 1.0
 
-    xs = torch.from_numpy(xs).cuda()
+    xs = torch.from_numpy(states).cuda()
     next_states = torch.from_numpy(next_states).cuda()
     actions = torch.from_numpy(actions).cuda()
     ys = torch.from_numpy(ys).cuda()
-    ends = torch.from_numpy(ends).cuda()
+    non_ends = torch.from_numpy(non_ends).cuda()
 
     target_q_values = q_agent.target_q_values(next_states) # Tensor (b, n_actions)
     n_actions = target_q_values.size(1)
@@ -194,10 +196,9 @@ def samples_to_minibatch(samples, q_agent):
         next_qs = target_q_values.mul_(next_actions).sum(1)
     else:
         next_qs = target_q_values.max(1)[0] # max returns a pair
-    ys += next_qs.mul_(ends).mul_(q_agent.gamma)
+    ys += next_qs.mul_(non_ends).mul_(q_agent.gamma)
     # convert to one-hot
     actions = actions_mask.scatter_(1, actions, 1)
 
     assert xs.size(0)==len(samples)
     return xs, actions, ys
-
