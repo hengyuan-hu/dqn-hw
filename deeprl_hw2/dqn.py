@@ -194,9 +194,9 @@ class DQNAgent(object):
                 torch.save(self.online_q_net.state_dict(), model_path)
 
         torch.save(self.online_q_net.state_dict(), os.path.join(output_path, 'net_final.pth'))
-        log = agent.eval(eval_args['eval_env'], eval_args['eval_policy'], eval_args['num_episodes_at_end'])
-        train_log.write(log+'\n')
-        train_log.flush()
+        log = self.eval(eval_args['eval_env'], eval_args['eval_policy'], eval_args['num_episodes_at_end'])
+        log_file.write(log+'\n')
+        log_file.flush()
 
     def eval(self, env, policy, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
@@ -314,6 +314,6 @@ class LinearQNAgent(DQNAgent):
                 torch.save(self.online_q_net.state_dict(), model_path)
 
         torch.save(self.online_q_net.state_dict(), os.path.join(output_path, 'net_final.pth'))
-        log = agent.eval(eval_args['eval_env'], eval_args['eval_policy'], eval_args['num_episodes_at_end'])
-        train_log.write(log+'\n')
-        train_log.flush()
+        log = self.eval(eval_args['eval_env'], eval_args['eval_policy'], eval_args['num_episodes_at_end'])
+        log_file.write(log+'\n')
+        log_file.flush()
