@@ -156,7 +156,7 @@ def samples_to_minibatch(samples, q_agent):
     convert [sample.state] to input tensor xs
     compute target tensor ys according to whether terminate and q_network
     it is possible to have only one kind of sample (all term/non-term)
-    double_dq:
+    q_agent.use_double_dqn:
         True: y = r + targetQ(s', argmax_a'(onlineQ(s',a')))
         False: y = r + max_a'(onlineQ(s',a'))
     return: Tensors that can be directly used by q_network
@@ -190,7 +190,7 @@ def samples_to_minibatch(samples, q_agent):
     if q_agent.use_double_dqn:
         online_q_values = q_agent.online_q_values(next_states)
         next_actions = online_q_values.max(1)[1] # argmax
-        next_actions = actions_mask.scatter_(1, next_actions, 1)
+        next_actions = actions_mask.scatter_(1, next_actions, 1) # one-hot
         next_qs = target_q_values.mul_(next_actions).sum(1)
     else:
         next_qs = target_q_values.max(1)[0] # max returns a pair

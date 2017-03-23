@@ -40,9 +40,11 @@ class QNetwork(nn.Module):
         return err
 
     def train_step(self, x, a, y):
-        """accum gradients and apply every update_freq"""
+        """accum grads and apply every update_freq
+           equivalent to augmenting batch_size by a factor of update_freq
+        """
         self.step = (self.step + 1) % self.update_freq
-        err = self.loss(x, a, y)
+        err = self.loss(x, a, y) / self.update_freq
         err.backward()
 
         if self.step == 0:

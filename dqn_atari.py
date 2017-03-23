@@ -109,6 +109,9 @@ if __name__ == '__main__':
                            args.frame_size,
                            record=True,
                            mnt_path=os.path.join(args.output, 'monitor'))
+    env.seed(888888)
+    eval_env.seed(555555)
+
     replay_memory = ReplayMemory(args.replay_buffer_size)
     train_policy = LinearDecayGreedyEpsilonPolicy(
         args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
