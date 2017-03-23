@@ -76,7 +76,7 @@ def main():
     parser.add_argument('--train_eps_num_steps', default=1000000, type=int)
     parser.add_argument('--eval_eps', default=0.05, type=float)
     parser.add_argument('--num_burn_in', default=50000, type=int)
-    parser.add_argument('--negative_dead_reward', default=False, type=bool,
+    parser.add_argument('--negative_dead_reward', action='store_true',
                         help='whether die in SpaceInvaders-v0 gives a negative reward')
     parser.add_argument('--output', default='experiments/test/')
     parser.add_argument('--algorithm', default='dqn', type=str)
@@ -154,11 +154,11 @@ if __name__ == '__main__':
     elif 'dqn' in args.algorithm:
         use_double_dqn = 'double' in args.algorithm
         q_net = DQNetwork(args.num_frames,
-                         args.frame_size,
-                         env.num_actions,
-                         args.update_freq,
-                         optim_args,
-                         args.q_net)
+                          args.frame_size,
+                          env.num_actions,
+                          args.update_freq,
+                          optim_args,
+                          args.q_net)
         agent = DQNAgent(q_net,
                          replay_memory,
                          args.gamma,

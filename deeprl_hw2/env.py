@@ -85,7 +85,9 @@ class Environment(object):
         reward = np.sign(reward)
 
         # hack reward to be negative if life lost
-        if self.negative_dead_reward and self.name=='SpaceInvaders-v0' and info['ale.lives']<self.lives:
+        if (self.negative_dead_reward
+            and self.name == 'SpaceInvaders-v0'
+            and info['ale.lives'] < self.lives):
             reward = -1.0
             self.lives = info['ale.lives']
 
