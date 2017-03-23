@@ -10,7 +10,7 @@ from deeprl_hw2.env import Environment
 import torch
 from deeprl_hw2.dqn import DQNAgent, LinearQNAgent
 from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
-from deeprl_hw2.model import DQNetwork, LinearQNetwork, DuelingQNetwork
+from deeprl_hw2.model import DQNetwork, DeeperQNetwork, LinearQNetwork, DuelingQNetwork
 from deeprl_hw2.core import ReplayMemory, samples_to_minibatch
 
 
@@ -153,6 +153,8 @@ if __name__ == '__main__':
                          use_double_dqn)
     elif 'dqn' in args.algorithm:
         use_double_dqn = 'double' in args.algorithm
+        if 'deeper' in args.algorithm:
+            DQNetwork = DeeperQNetwork
         q_net = DQNetwork(args.num_frames,
                           args.frame_size,
                           env.num_actions,

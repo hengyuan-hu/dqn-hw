@@ -87,6 +87,39 @@ class DQNetwork(QNetwork):
         return y
 
 
+class DeeperQNetwork(DQNetwork):
+    def __init__(self, num_frames, frame_size, num_actions,
+                 update_freq, optim_args, net_file=None):
+        super(DeeperQNetwork, self).__init__(
+            num_frames, frame_size, num_actions,
+            update_freq, optim_args, net_file)
+
+    def _build_model(self):
+        # TODO: padding or not???
+        conv = nn.Sequential()
+        conv.add_module('conv1', nn.Conv2d(self.num_frames, 32, 8, 4))
+        conv.add_module('relu1', nn.ReLU(inplace=True))
+        conv.add_module('conv2', nn.Conv2d(32, 64, 4, 2))
+        conv.add_module('relu2', nn.ReLU(inplace=True))
+        conv.add_module('conv3', nn.Conv2d(64, 64, 3, 1))
+        conv.add_module('relu3', nn.ReLU(inplace=True))
+
+        fake_input = Variable(
+            torch.FloatTensor(1, self.num_frames, self.frame_size,
+                              self.frame_size), volatile=True)
+        num_fc_in = conv.forward(fake_input).view(-1).size()[0]
+        fc = nn.Sequential()
+        fc.add_module('fc1', nn.Linear(num_fc_in, 512))
+        fc.add_module('fc_relu1', nn.ReLU(inplace=True))
+        fc.add_module('output', nn.Linear(512, self.num_actions))
+
+        self.conv = conv
+        self.fc = fc
+        utils.init_net(self, self.net_file)
+        self.cuda()
+        self.optim = torch.optim.RMSprop(self.parameters(), **self.optim_args)
+
+
 class DuelingQNetwork(QNetwork):
     def __init__(self, num_frames, frame_size, num_actions, update_freq, optim_args, net_file=None):
         super(DuelingQNetwork, self).__init__(num_frames, frame_size, num_actions,
