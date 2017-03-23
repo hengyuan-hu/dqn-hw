@@ -10,7 +10,7 @@ from deeprl_hw2.env import Environment
 import torch
 from deeprl_hw2.dqn import DQNAgent, LinearQNAgent
 from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
-from deeprl_hw2.model import QNetwork, LinearQNetwork
+from deeprl_hw2.model import DQNetwork, LinearQNetwork, DuelingQNetwork
 from deeprl_hw2.core import ReplayMemory, samples_to_minibatch
 
 
@@ -78,7 +78,7 @@ def main():
     parser.add_argument('--num_burn_in', default=50000, type=int)
     parser.add_argument('--negative_dead_reward', default=False, type=bool,
                         help='whether die in SpaceInvaders-v0 gives a negative reward')
-    parser.add_argument('--output', default='experiments/test0')
+    parser.add_argument('--output', default='experiments/test/')
     parser.add_argument('--algorithm', default='dqn', type=str)
 
     args = parser.parse_args()
@@ -108,7 +108,7 @@ if __name__ == '__main__':
                            args.num_frames,
                            args.frame_size,
                            record=True,
-                           mnt_path=os.path.join(args.output, args.algorithm))
+                           mnt_path=os.path.join(args.output, 'monitor'))
     replay_memory = ReplayMemory(args.replay_buffer_size)
     train_policy = LinearDecayGreedyEpsilonPolicy(
         args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
@@ -138,10 +138,22 @@ if __name__ == '__main__':
                               args.num_burn_in,
                               use_double_q)
     elif 'dueling' in args.algorithm:
-        assert False, 'not implemented yet'
+        use_double_dqn = 'double' in args.algorithm
+        q_net = DuelingQNetwork(args.num_frames,
+                                 args.frame_size,
+                                 env.num_actions,
+                                 args.update_freq,
+                                 optim_args,
+                                 args.q_net)
+        agent = DQNAgent(q_net,
+                         replay_memory,
+                         args.gamma,
+                         args.target_q_sync_interval,
+                         args.num_burn_in,
+                         use_double_dqn)
     elif 'dqn' in args.algorithm:
         use_double_dqn = 'double' in args.algorithm
-        q_net = QNetwork(args.num_frames,
+        q_net = DQNetwork(args.num_frames,
                          args.frame_size,
                          env.num_actions,
                          args.update_freq,
