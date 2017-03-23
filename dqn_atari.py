@@ -72,11 +72,11 @@ def main():
     parser.add_argument('--train_final_eps', default=0.1, type=float)
     parser.add_argument('--train_eps_num_steps', default=1000000, type=int)
     parser.add_argument('--eval_eps', default=0.05, type=float)
-    parser.add_argument('--num_burn_in', default=50000, type=float)
+    parser.add_argument('--num_burn_in', default=50000, type=int)
     parser.add_argument('--negative_dead_reward', default=True, type=bool,
                         help='whether dying in SpaceInvaders-v0 will generate a negative reward')
     parser.add_argument('--output', default='experiments/test0')
-    parser.add_argument('--algorithm', default='double_linear', type=str)
+    parser.add_argument('--algorithm', default='dqn', type=str)
 
     args = parser.parse_args()
     # args.output = get_output_folder(args.output, args.env)
@@ -142,7 +142,7 @@ if __name__ == '__main__':
     train_log = open(os.path.join(args.output, 'train_log.txt'), 'w')
     eval_args = {
         'eval_env': eval_env,
-        'eval_per_iter': 10000,
+        'eval_per_iter': 100000,
         'eval_policy': eval_policy,
         'num_episodes': 20
     }

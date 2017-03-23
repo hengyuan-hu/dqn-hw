@@ -187,7 +187,7 @@ class DQNAgent(object):
             if (i+1) % self.target_update_freq:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
             if (i+1) % (num_iters/4)==0:
-                torch.save(self.online_q_net.state_dict(), 'net_%d.pth'%((i+1)/(num_iters/3)))
+                torch.save(self.online_q_net.state_dict(), 'net_%d.pth'%((i+1)/(num_iters/4)))
 
     def eval(self, env, policy, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
