@@ -38,19 +38,20 @@ class Sample(object):
     def __init__(self, state, action, reward, next_state, end):
         utils.assert_eq(type(state), type(next_state))
         # merge two states internally and clip to uint8 to save memory
-        last_frame = np.take(next_state, [-1], axis=0)
-        self._merged_frames = np.append(state, last_frame, axis=0).astype(np.uint8)
+        self._packed_frames = np.packbits(np.vstack([state, next_state]).astype(np.uint8, copy=False),axis=0)
         self.action = action
         self.reward = reward
         self.end = end
 
     @property
     def state(self):
-        return self._merged_frames[:-1].astype(np.float32)
+        state = np.unpackbits(self._packed_frames, axis=0)[:4].astype(np.float32, copy=False)
+        return state
 
     @property
     def next_state(self):
-        return self._merged_frames[1:].astype(np.float32)
+        next_state = np.unpackbits(self._packed_frames, axis=0)[4:].astype(np.float32, copy=False)
+        return next_state
 
     def __str__(self):
         info = ('S(mean): %3.4f, A: %s, R: %s, NS(mean): %3.4f, End: %s'
@@ -190,7 +191,6 @@ def samples_to_minibatch(samples, q_agent):
         online_q_values = q_agent.online_q_values(next_states)
         next_actions = online_q_values.max(1)[1] # argmax
         next_actions = actions_mask.scatter_(1, next_actions, 1)
-        print 'next_actions:', next_actions
         next_qs = target_q_values.mul_(next_actions).sum(1)
     else:
         next_qs = target_q_values.max(1)[0] # max returns a pair
