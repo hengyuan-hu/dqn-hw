@@ -165,17 +165,15 @@ def samples_to_minibatch(samples, q_agent):
         ys: (b, 1) FloatTensor
     """
     assert len(samples) > 0
-    dummy = samples[0]
+    dummy_state, _ = samples[0].get_state_and_next_state()
 
-    states = np.zeros((len(samples),) + dummy.state.shape, dtype=np.float32)
+    states = np.zeros((len(samples),) + dummy_state.shape, dtype=np.float32)
     next_states = np.zeros_like(states)
     ys = np.zeros((len(samples), 1), dtype=np.float32)
     actions = np.zeros_like(ys, dtype=np.int64)
     non_ends = np.zeros_like(ys)
     for i, s in enumerate(samples):
         states[i], next_states[i] = s.get_state_and_next_state()
-        assert (states[i] == s.state).all()
-        assert (next_states[i] == s.next_state).all()
         ys[i] = s.reward
         actions[i] = s.action
         non_ends[i] = 0.0 if s.end else 1.0
