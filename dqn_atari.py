@@ -83,7 +83,7 @@ def main():
 
     args = parser.parse_args()
     # args.output = get_output_folder(args.output, args.env)
-    args.output = args.algorithm + args.output
+    args.output = args.output + args.algorithm
     if not os.path.exists(args.output):
         os.makedirs(args.output)
     with open(os.path.join(args.output, 'configs.txt'), 'w') as f:
