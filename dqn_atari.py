@@ -56,9 +56,12 @@ def main():
     parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
     parser.add_argument('--seed', default=6666999, type=int, help='Random seed')
     parser.add_argument('--lr', default=0.00025, type=float, help='learning rate')
-    parser.add_argument('--alpha', default=0.95, type=float, help='squared gradient momentum for RMS prop')
-    parser.add_argument('--momentum', default=0.95, type=float, help='gradient momentum')
-    parser.add_argument('--rms_eps', default=0.01, type=float, help='min squared gradient for RMS prop')
+    parser.add_argument('--alpha', default=0.95, type=float,
+                        help='squared gradient momentum for RMS prop')
+    parser.add_argument('--momentum', default=0.95, type=float,
+                        help='gradient momentum')
+    parser.add_argument('--rms_eps', default=0.01, type=float,
+                        help='min squared gradient for RMS prop')
     parser.add_argument('--q_net', default='', type=str, help='load pretrained q net')
     parser.add_argument('--gamma', default=0.99, type=float, help='discount factor')
     parser.add_argument('--num_iters', default=5000000, type=int)
@@ -73,8 +76,8 @@ def main():
     parser.add_argument('--train_eps_num_steps', default=1000000, type=int)
     parser.add_argument('--eval_eps', default=0.05, type=float)
     parser.add_argument('--num_burn_in', default=50000, type=int)
-    parser.add_argument('--negative_dead_reward', default=True, type=bool,
-                        help='whether dying in SpaceInvaders-v0 will generate a negative reward')
+    parser.add_argument('--negative_dead_reward', default=False, type=bool,
+                        help='whether die in SpaceInvaders-v0 gives a negative reward')
     parser.add_argument('--output', default='experiments/test0')
     parser.add_argument('--algorithm', default='dqn', type=str)
 
@@ -96,9 +99,14 @@ if __name__ == '__main__':
     args = main()
     torch.backends.cudnn.benckmark = True
 
-    env = Environment(args.env, args.num_frames, args.frame_size, negative_dead_reward=args.negative_dead_reward)
-    eval_env = Environment(args.env, args.num_frames,
-                           args.frame_size,record=True,
+    env = Environment(args.env,
+                      args.num_frames,
+                      args.frame_size,
+                      negative_dead_reward=args.negative_dead_reward)
+    eval_env = Environment(args.env,
+                           args.num_frames,
+                           args.frame_size,
+                           record=True,
                            mnt_path=os.path.join(args.output, args.algorithm))
     replay_memory = ReplayMemory(args.replay_buffer_size)
     train_policy = LinearDecayGreedyEpsilonPolicy(
@@ -112,32 +120,40 @@ if __name__ == '__main__':
     }
 
     if 'linear' in args.algorithm:
-        dumb = 'dumb' in args.algorithm
+        if 'no_replay' in args.algorithm:
+            replay_memory = None
+            args.num_burn_in = 0
         use_double_q = 'double' in args.algorithm
-        q_net = LinearQNetwork(args.num_frames, args.frame_size, env.num_actions,
-                           args.update_freq, optim_args, args.q_net)
+        q_net = LinearQNetwork(args.num_frames,
+                               args.frame_size,
+                               env.num_actions,
+                               args.update_freq,
+                               optim_args,
+                               args.q_net)
         agent = LinearQNAgent(q_net,
                               replay_memory,
                               args.gamma,
                               args.target_q_sync_interval,
                               args.num_burn_in,
-                              use_double_q=use_double_q,
-                              dumb=dumb)
+                              use_double_q)
     elif 'dueling' in args.algorithm:
-        pass
+        assert False, 'not implemented yet'
     elif 'dqn' in args.algorithm:
         use_double_dqn = 'double' in args.algorithm
-        q_net = QNetwork(args.num_frames, args.frame_size, env.num_actions,
-                         args.update_freq, optim_args, args.q_net)
+        q_net = QNetwork(args.num_frames,
+                         args.frame_size,
+                         env.num_actions,
+                         args.update_freq,
+                         optim_args,
+                         args.q_net)
         agent = DQNAgent(q_net,
                          replay_memory,
                          args.gamma,
                          args.target_q_sync_interval,
                          args.num_burn_in,
-                         use_double_dqn=use_double_dqn)
+                         use_double_dqn)
     else:
-        print 'model not implented'
-        exit(1)
+        assert False, 'not implemented yet'
 
     train_log = open(os.path.join(args.output, 'train_log.txt'), 'w')
     eval_args = {
@@ -146,7 +162,6 @@ if __name__ == '__main__':
         'eval_policy': eval_policy,
         'num_episodes': 20
     }
-    # args.num_iters = 300
     agent.train(env, train_policy, args.batch_size, args.num_iters,
                 train_log, eval_args)
     log = agent.eval(eval_env, eval_policy, 100)

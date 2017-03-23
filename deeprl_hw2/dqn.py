@@ -56,7 +56,7 @@ class DQNAgent(object):
                  gamma,
                  target_update_freq,
                  num_burn_in,
-                 use_double_dqn=False):
+                 use_double_dqn):
         self.online_q_net = q_network
         self.target_q_net = copy.deepcopy(q_network)
 
@@ -185,9 +185,9 @@ class DQNAgent(object):
             losses.append(self._update_q_net(batch_size))
             rewards.append(reward)
 
-            if (i+1) % self.target_update_freq:
+            if (i+1) % self.target_update_freq == 0:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
-            if (i+1) % (num_iters/4)==0:
+            if (i+1) % (num_iters/4) == 0:
                 torch.save(self.online_q_net.state_dict(),
                            'net_%d.pth' % ((i+1)/(num_iters/4)))
 
@@ -233,23 +233,18 @@ class LinearQNAgent(DQNAgent):
                  gamma,
                  target_update_freq,
                  num_burn_in,
-                 use_double_q=False,
-                 dumb=False):
-        self.online_q_net = q_network
-        self.target_q_net = copy.deepcopy(q_network)
-        if not dumb:
-            self.replay_memory = memory
-        self.gamma = gamma
-        self.target_update_freq = target_update_freq
-        self.num_burn_in = num_burn_in
-        self.use_double_dqn = False # for sampling
+                 use_double_q):
+        super(LinearQNAgent, self).__init__(
+            q_network, memory, gamma, target_update_freq, num_burn_in, False)
+
         self.use_double_q = use_double_q
-        self.dumb = dumb
+        if self.replay_memory is None:
+            assert not self.num_burn_in, self.num_burn_in
 
     def train(self, env, policy, batch_size, num_iters, log_file, eval_args):
         state_gpu = torch.cuda.FloatTensor(
             1, env.num_frames, env.frame_size, env.frame_size)
-        if not self.dumb:
+        if self.replay_memory is not None:
             state = self._burn_in(env)
 
         num_episodes = 0
@@ -265,7 +260,7 @@ class LinearQNAgent(DQNAgent):
                 log = ('Episode: %d, Iter: %d, Reward Sum: %s; Loss: %s\n'
                        % (num_episodes, i+1, sum(rewards), np.mean(losses)))
                 log += '\tTime taken: %s' % (time.time() - t)
-                if not self.dumb:
+                if self.replay_memory:
                     print '---memory size: ', len(self.replay_memory)
                 print '---policy eps: ', policy.epsilon
 
@@ -289,8 +284,7 @@ class LinearQNAgent(DQNAgent):
             action = self.select_action(state_gpu, policy)
             next_state, reward = env.step(action)
 
-            # dumb => train on only current sample
-            if not self.dumb:
+            if self.replay_memory is not None:
                 self.replay_memory.append(state, action, reward, next_state, env.end)
                 loss = self._update_q_net(batch_size)
             else:
@@ -304,7 +298,5 @@ class LinearQNAgent(DQNAgent):
                 # flip networks
                 self.target_q_net, self.online_q_net = \
                     self.online_q_net, self.target_q_net
-            else:
-                # dumb => no target fixing, always sync
-                if self.dumb or (i+1) % self.target_update_freq:
+            elif self.replay_memory is None or ((i+1) % self.target_update_freq == 0):
                     self.target_q_net = copy.deepcopy(self.online_q_net)
