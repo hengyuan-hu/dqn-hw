@@ -155,16 +155,12 @@ if __name__ == '__main__':
     else:
         assert False, 'not implemented yet'
 
-    train_log = open(os.path.join(args.output, 'train_log.txt'), 'w')
     eval_args = {
         'eval_env': eval_env,
         'eval_per_iter': 100000,
         'eval_policy': eval_policy,
-        'num_episodes': 20
+        'num_episodes': 20,
+        'num_episodes_at_end' : 100
     }
     agent.train(env, train_policy, args.batch_size, args.num_iters,
-                train_log, eval_args)
-    log = agent.eval(eval_env, eval_policy, 100)
-    train_log.write(log+'\n')
-    train_log.flush()
-    torch.save(q_net.state_dict(), os.path.join(args.output, 'net_done'))
+                eval_args, args.output)

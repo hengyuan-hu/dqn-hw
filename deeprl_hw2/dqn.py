@@ -9,7 +9,7 @@ import utils
 from policy import GreedyEpsilonPolicy
 import core
 from collections import Counter
-
+import os
 
 class DQNAgent(object):
     """Class implementing DQN.
@@ -116,7 +116,7 @@ class DQNAgent(object):
         loss = self.online_q_net.train_step(x, a, y)
         return loss
 
-    def train(self, env, policy, batch_size, num_iters, log_file, eval_args):
+    def train(self, env, policy, batch_size, num_iters, eval_args, output_path):
         # , max_episode_length=None):
         """Fit your model to the provided environment.
 
@@ -142,6 +142,7 @@ class DQNAgent(object):
           How long a single episode should last before the agent
           resets. Can help exploration.
         """
+        log_file = open(os.path.join(output_path, 'train_log.txt'), 'w')
         state_gpu = torch.cuda.FloatTensor(
             1, env.num_frames, env.frame_size, env.frame_size)
         state = self._burn_in(env)
@@ -164,6 +165,7 @@ class DQNAgent(object):
                 milestone = (i+1) / eval_args['eval_per_iter']
                 if milestone > last_eval_milestone:
                     last_eval_milestone = milestone
+                    log += '\n'
                     log += self.eval(
                         eval_args['eval_env'], eval_args['eval_policy'],
                         eval_args['num_episodes'])
@@ -188,8 +190,13 @@ class DQNAgent(object):
             if (i+1) % self.target_update_freq == 0:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
             if (i+1) % (num_iters/4) == 0:
-                torch.save(self.online_q_net.state_dict(),
-                           'net_%d.pth' % ((i+1)/(num_iters/4)))
+                model_path = os.path.join(output_path, 'net_%d.pth' % ((i+1)/(num_iters/4)))
+                torch.save(self.online_q_net.state_dict(), model_path)
+
+        torch.save(self.online_q_net.state_dict(), os.path.join(output_path, 'net_final.pth'))
+        log = agent.eval(eval_args['eval_env'], eval_args['eval_policy'], eval_args['num_episodes_at_end'])
+        train_log.write(log+'\n')
+        train_log.flush()
 
     def eval(self, env, policy, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
@@ -241,7 +248,8 @@ class LinearQNAgent(DQNAgent):
         if self.replay_memory is None:
             assert not self.num_burn_in, self.num_burn_in
 
-    def train(self, env, policy, batch_size, num_iters, log_file, eval_args):
+    def train(self, env, policy, batch_size, num_iters, eval_args, output_path):
+        log_file = open(os.path.join(output_path, 'train_log.txt'), 'w')
         state_gpu = torch.cuda.FloatTensor(
             1, env.num_frames, env.frame_size, env.frame_size)
         if self.replay_memory is not None:
@@ -300,3 +308,12 @@ class LinearQNAgent(DQNAgent):
                     self.online_q_net, self.target_q_net
             elif self.replay_memory is None or ((i+1) % self.target_update_freq == 0):
                     self.target_q_net = copy.deepcopy(self.online_q_net)
+
+            if (i+1) % (num_iters/4) == 0:
+                model_path = os.path.join(output_path, 'net_%d.pth' % ((i+1)/(num_iters/4)))
+                torch.save(self.online_q_net.state_dict(), model_path)
+
+        torch.save(self.online_q_net.state_dict(), os.path.join(output_path, 'net_final.pth'))
+        log = agent.eval(eval_args['eval_env'], eval_args['eval_policy'], eval_args['num_episodes_at_end'])
+        train_log.write(log+'\n')
+        train_log.flush()

@@ -13,7 +13,7 @@ def preprocess_frame(observ, output_size):
     output = cv2.resize(gray, (output_size, output_size))
     output = output.astype(np.float32)
     output[output>0] = 1.0
-    imsave('frame.png', output)
+    #imsave('frame.png', output)
     return output
 
 SPACE_INVADERS_INIT_LIVES = 3
