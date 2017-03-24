@@ -108,6 +108,7 @@ if __name__ == '__main__':
                            args.num_frames,
                            args.frame_size,
                            record=True,
+                           video_callable=lambda x:True,
                            mnt_path=os.path.join(args.output, 'monitor'))
     env.seed(888888)
     eval_env.seed(555555)

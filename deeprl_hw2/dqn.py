@@ -195,6 +195,7 @@ class DQNAgent(object):
 
         torch.save(self.online_q_net.state_dict(), os.path.join(output_path, 'net_final.pth'))
         log = self.eval(eval_args['eval_env'], eval_args['eval_policy'], eval_args['num_episodes_at_end'])
+        eval_args['eval_env'].reset() # finish the recording for the very last episode
         log_file.write(log+'\n')
         log_file.flush()
 
@@ -223,7 +224,7 @@ class DQNAgent(object):
                 eps_log = ('>>>Eval: [%d/%d], rewards: %s\n' %
                            (eps_idx+1, num_episodes, total_rewards[eps_idx]))
                 log += eps_log
-                if eps_idx < num_episodes: # leave reset to next run
+                if eps_idx < num_episodes-1: # leave last reset to next run
                     state = env.reset()
                 eps_idx += 1
 

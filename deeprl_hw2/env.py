@@ -28,7 +28,7 @@ class Environment(object):
             def capture_all(episode_id):
                 return True
             def capture_every_twenty(episode_id):
-                return (episode_id+1) % 20==0
+                return episode_id % 20==0 # return first of each eval
             if mnt_path is None:
                 mnt_path = './monitor/'
             if video_callable is None:
