@@ -37,3 +37,9 @@ def init_net(net, net_file):
         net.load_state_dict(torch.load(net_file))
     else:
         net.apply(weights_init)
+
+
+def count_output_size(input_shape, module):
+    fake_input = Variable(torch.FloatTensor(*input_shape), volatile=True)
+    output_size = module.forward(fake_input).view(-1).size()[0]
+    return output_size

@@ -8,10 +8,10 @@ import tensorflow #TODO: remove this
 # always import env (import cv2) first, to avoid opencv magic
 from deeprl_hw2.env import Environment
 import torch
-from deeprl_hw2.dqn import DQNAgent, LinearQNAgent
+from deeprl_hw2.dqn import DQNAgent
 from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
-from deeprl_hw2.model import DQNetwork, DeeperQNetwork, LinearQNetwork, DuelingQNetwork
-from deeprl_hw2.core import ReplayMemory, samples_to_minibatch
+from deeprl_hw2.model import DQNetwork, DeeperQNetwork, DuelingQNetwork
+from deeprl_hw2.core import ReplayMemory
 
 
 def get_output_folder(parent_dir, env_name):
@@ -78,6 +78,7 @@ def main():
     parser.add_argument('--num_burn_in', default=50000, type=int)
     parser.add_argument('--negative_dead_reward', action='store_true',
                         help='whether die in SpaceInvaders-v0 gives a negative reward')
+    parser.add_argument('--use_double_dqn', action='store_true')
     parser.add_argument('--output', default='experiments/test')
     parser.add_argument('--algorithm', default='dqn', type=str)
 
@@ -124,56 +125,27 @@ if __name__ == '__main__':
         'eps': args.rms_eps
     }
 
-    if 'linear' in args.algorithm:
-        if 'no_replay' in args.algorithm:
-            replay_memory = None
-            args.num_burn_in = 0
-        use_double_q = 'double' in args.algorithm
-        q_net = LinearQNetwork(args.num_frames,
-                               args.frame_size,
-                               env.num_actions,
-                               args.update_freq,
-                               optim_args,
-                               args.q_net)
-        agent = LinearQNAgent(q_net,
-                              replay_memory,
-                              args.gamma,
-                              args.target_q_sync_interval,
-                              args.num_burn_in,
-                              use_double_q)
-    elif 'dueling' in args.algorithm:
-        use_double_dqn = 'double' in args.algorithm
-        q_net = DuelingQNetwork(args.num_frames,
-                                 args.frame_size,
-                                 env.num_actions,
-                                 args.update_freq,
-                                 optim_args,
-                                 args.q_net)
-        agent = DQNAgent(q_net,
-                         replay_memory,
-                         args.gamma,
-                         args.target_q_sync_interval,
-                         args.num_burn_in,
-                         use_double_dqn)
-    elif 'dqn' in args.algorithm:
-        use_double_dqn = 'double' in args.algorithm
-        if 'deeper' in args.algorithm:
-            DQNetwork = DeeperQNetwork
-        q_net = DQNetwork(args.num_frames,
-                          args.frame_size,
-                          env.num_actions,
-                          args.update_freq,
-                          optim_args,
-                          args.q_net)
-        agent = DQNAgent(q_net,
-                         replay_memory,
-                         args.gamma,
-                         args.target_q_sync_interval,
-                         args.num_burn_in,
-                         use_double_dqn)
+    if 'dueling' == args.algorithm:
+        QNClass = DuelingQNetwork
+    elif 'dqn' == args.algorithm:
+        QNClass = DQNetwork
+    elif 'deeper_qn' == args.algorithm:
+        QNClass = DeepQNetwork
     else:
-        assert False, 'not implemented yet'
+        assert False, '%s is not implemented yet' % args.algorithm
 
+    q_net = QNClass(args.num_frames,
+                    args.frame_size,
+                    env.num_actions,
+                    args.update_freq,
+                    optim_args,
+                    args.q_net)
+    agent = DQNAgent(q_net,
+                     replay_memory,
+                     args.gamma,
+                     args.target_q_sync_interval,
+                     args.num_burn_in,
+                     args.use_double_dqn)
     eval_args = {
         'eval_env': eval_env,
         'eval_per_iter': 100000,
@@ -181,5 +153,5 @@ if __name__ == '__main__':
         'num_episodes': 20,
         'num_episodes_at_end' : 100
     }
-    agent.train(env, train_policy, args.batch_size, args.num_iters,
-                eval_args, args.output)
+    agent.train(
+        env, train_policy, args.batch_size, args.num_iters, eval_args, args.output)

@@ -6,29 +6,31 @@ import utils
 
 
 class QNetwork(nn.Module):
-    def __init__(self, num_frames, frame_size, num_actions, update_freq, optim_args, net_file=None):
+    def __init__(self, num_frames, frame_size, num_actions,
+                 update_freq, optim_args, net_file):
         """
         num_frames: i.e. num of channels of input
         frame_size: int, frame has to be square for simplicity
         num_actions: i.e. num of output Q values
         """
         super(QNetwork, self).__init__()
-        self.num_frames = num_frames
-        self.frame_size = frame_size
-        self.num_actions = num_actions
         self.update_freq = update_freq
-        self.optim_args = optim_args
-        self.net_file = net_file
-
         self.step = 0
 
-        self._build_model()
+        self._build_model((num_frames, frame_size, frame_size), num_actions)
+        utils.init_net(self, net_file)
+        self.cuda()
+        self.optim = torch.optim.RMSprop(self.parameters(), **optim_args)
 
-    def _build_model(self):
-        return
+    def _build_model(self, input_shape, num_actions):
+        """
+        input_shape: (num_channel, frame_size, frame_size)
+        num_actions: decides num of outputs of q_net
+        """
+        raise NotImplementedError
 
     def forward(self, x):
-        return x
+        raise NotImplementedError
 
     def loss(self, x, a, y):
         utils.assert_eq(a.dim(), 2)
@@ -53,31 +55,22 @@ class QNetwork(nn.Module):
 
 
 class DQNetwork(QNetwork):
-    def __init__(self, num_frames, frame_size, num_actions, update_freq, optim_args, net_file=None):
-        super(DQNetwork, self).__init__(num_frames, frame_size, num_actions,
-                                        update_freq, optim_args, net_file)
 
-    def _build_model(self):
-        # TODO: padding or not???
+    def _build_model(self, input_shape, num_actions):
         conv = nn.Sequential()
-        conv.add_module('conv1', nn.Conv2d(self.num_frames, 16, 8, 4))
+        conv.add_module('conv1', nn.Conv2d(input_shape[0], 16, 8, 4))
         conv.add_module('relu1', nn.ReLU(inplace=True))
         conv.add_module('conv2', nn.Conv2d(16, 32, 4, 2))
         conv.add_module('relu2', nn.ReLU(inplace=True))
 
-        # TODO: factor this out as helper
-        fake_input = Variable(
-            torch.FloatTensor(1, self.num_frames, self.frame_size, self.frame_size),
-            volatile=True)
-        num_fc_in = conv.forward(fake_input).view(-1).size()[0]
-
+        num_fc_in = utils.count_output_size((1,)+input_shape, conv)
         num_fc_out = 256
         fc = nn.Sequential()
         fc.add_module('fc1', nn.Linear(num_fc_in, num_fc_out))
         fc.add_module('fc_relu1', nn.ReLU(inplace=True))
 
         q_net = nn.Sequential()
-        q_net.add_module('output', nn.Linear(num_fc_out, self.num_actions))
+        q_net.add_module('output', nn.Linear(num_fc_out, num_actions))
 
         predictor = nn.Sequential()
         predictor.add_module('pd1', nn.Linear(num_fc_out, num_fc_out/2))
@@ -89,11 +82,6 @@ class DQNetwork(QNetwork):
         self.fc = fc
         self.q_net = q_net
         self.predictor = predictor
-
-        # TODO: move this out
-        utils.init_net(self, self.net_file)
-        self.cuda()
-        self.optim = torch.optim.RMSprop(self.parameters(), **self.optim_args)
 
     def forward(self, x):
         feat = self.conv(x)
@@ -133,59 +121,41 @@ class DQNetwork(QNetwork):
 
 
 class DeeperQNetwork(DQNetwork):
-    def __init__(self, num_frames, frame_size, num_actions,
-                 update_freq, optim_args, net_file=None):
-        super(DeeperQNetwork, self).__init__(
-            num_frames, frame_size, num_actions,
-            update_freq, optim_args, net_file)
 
-    def _build_model(self):
-        # TODO: padding or not???
+    def _build_model(self, input_shape, num_actions):
         conv = nn.Sequential()
-        conv.add_module('conv1', nn.Conv2d(self.num_frames, 32, 8, 4))
+        conv.add_module('conv1', nn.Conv2d(input_shape[0], 32, 8, 4))
         conv.add_module('relu1', nn.ReLU(inplace=True))
         conv.add_module('conv2', nn.Conv2d(32, 64, 4, 2))
         conv.add_module('relu2', nn.ReLU(inplace=True))
         conv.add_module('conv3', nn.Conv2d(64, 64, 3, 1))
         conv.add_module('relu3', nn.ReLU(inplace=True))
 
-        fake_input = Variable(
-            torch.FloatTensor(1, self.num_frames, self.frame_size,
-                              self.frame_size), volatile=True)
-        num_fc_in = conv.forward(fake_input).view(-1).size()[0]
+        num_fc_in = utils.count_output_size((1,)+input_shape, conv)
+        num_fc_out = 512
         fc = nn.Sequential()
-        fc.add_module('fc1', nn.Linear(num_fc_in, 512))
+        fc.add_module('fc1', nn.Linear(num_fc_in, num_fc_out))
         fc.add_module('fc_relu1', nn.ReLU(inplace=True))
-        fc.add_module('output', nn.Linear(512, self.num_actions))
+        fc.add_module('output', nn.Linear(num_fc_out, num_actions))
 
         self.conv = conv
         self.fc = fc
-        utils.init_net(self, self.net_file)
-        self.cuda()
-        self.optim = torch.optim.RMSprop(self.parameters(), **self.optim_args)
 
 
 class DuelingQNetwork(QNetwork):
-    def __init__(self, num_frames, frame_size, num_actions, update_freq, optim_args, net_file=None):
-        super(DuelingQNetwork, self).__init__(num_frames, frame_size, num_actions,
-                                             update_freq, optim_args, net_file)
 
-    def _build_model(self):
+    def _build_model(self, input_shape, num_actions):
         conv = nn.Sequential()
-        conv.add_module('conv1', nn.Conv2d(self.num_frames, 16, 8, 4))
+        conv.add_module('conv1', nn.Conv2d(input_shape[0], 16, 8, 4))
         conv.add_module('relu1', nn.ReLU(inplace=True))
         conv.add_module('conv2', nn.Conv2d(16, 32, 4, 2))
         conv.add_module('relu2', nn.ReLU(inplace=True))
 
-        fake_input = Variable(
-            torch.FloatTensor(1, self.num_frames, self.frame_size,
-                              self.frame_size), volatile=True)
-        num_fc_in = conv.forward(fake_input).view(-1).size()[0]
-
+        num_fc_in = utils.count_output_size((1,)+input_shape, conv)
         fc_a =  nn.Sequential()
         fc_a.add_module('fc1', nn.Linear(num_fc_in, 256))
         fc_a.add_module('fc_relu1', nn.ReLU(inplace=True))
-        fc_a.add_module('advantages', nn.Linear(256, self.num_actions))
+        fc_a.add_module('advantages', nn.Linear(256, num_actions))
 
         fc_v = nn.Sequential()
         fc_v.add_module('fc2', nn.Linear(num_fc_in, 256))
@@ -195,10 +165,6 @@ class DuelingQNetwork(QNetwork):
         self.conv = conv
         self.fc_a = fc_a
         self.fc_v = fc_v
-
-        utils.init_net(self, self.net_file)
-        self.cuda()
-        self.optim = torch.optim.RMSprop(self.parameters(), **self.optim_args)
 
     def forward(self, x):
         y = self.conv(x)
@@ -210,24 +176,6 @@ class DuelingQNetwork(QNetwork):
         utils.assert_eq(y.dim(), 2)
         return y
 
-
-class LinearQNetwork(QNetwork):
-    def __init__(self, num_frames, frame_size, num_actions, update_freq, optim_args, net_file=None):
-        super(LinearQNetwork, self).__init__(num_frames, frame_size, num_actions,
-                                             update_freq, optim_args, net_file)
-
-    def _build_model(self):
-        num_inputs = self.num_frames * self.frame_size * self.frame_size
-        self.fc = nn.Linear(num_inputs, self.num_actions)
-        utils.init_net(self, self.net_file)
-        self.cuda()
-        self.optim = torch.optim.RMSprop(self.parameters(), **self.optim_args)
-
-    def forward(self, x):
-        y = x.view(x.size(0), -1)
-        y = self.fc(y)
-        utils.assert_eq(y.dim(), 2)
-        return y
 
 if __name__ == '__main__':
     import copy

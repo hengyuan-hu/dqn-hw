@@ -92,7 +92,7 @@ class DQNAgent(object):
 
     def online_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
-        q_vals, feat, pred_feat = self.online_q_net(Variable(states, volatile=True))
+        q_vals, feats, pred_feats = self.online_q_net(Variable(states, volatile=True))
         # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
         return q_vals.data #, feat.data, pred_feat.data
 
@@ -161,7 +161,7 @@ class DQNAgent(object):
                 num_episodes += 1
                 log = ('Episode: %d, Iter: %d, Reward: %s; '
                        % (num_episodes, i+1, sum(rewards)))
-                log += ('y_loss: %s; pred_loss: %s\n'
+                log += ('y_loss: %.4f; pred_loss: %.4f\n'
                         % (np.mean(y_losses), np.mean(pred_losses)))
                 log += '\tTime taken: %s' % (time.time() - t)
                 milestone = (i+1) / eval_args['eval_per_iter']
@@ -196,11 +196,15 @@ class DQNAgent(object):
             if (i+1) % self.target_update_freq == 0:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
             if (i+1) % (num_iters/4) == 0:
-                model_path = os.path.join(output_path, 'net_%d.pth' % ((i+1)/(num_iters/4)))
+                model_path = os.path.join(
+                    output_path, 'net_%d.pth' % ((i+1)/(num_iters/4)))
                 torch.save(self.online_q_net.state_dict(), model_path)
 
-        torch.save(self.online_q_net.state_dict(), os.path.join(output_path, 'net_final.pth'))
-        log = self.eval(eval_args['eval_env'], eval_args['eval_policy'], eval_args['num_episodes_at_end'])
+        torch.save(self.online_q_net.state_dict(),
+                   os.path.join(output_path, 'net_final.pth'))
+        log = self.eval(eval_args['eval_env'],
+                        eval_args['eval_policy'],
+                        eval_args['num_episodes_at_end'])
         eval_args['eval_env'].reset() # finish the recording for the very last episode
         log_file.write(log+'\n')
         log_file.flush()
@@ -238,89 +242,3 @@ class DQNAgent(object):
         log += eps_log
         log += '>>>Eval: actions dist: %s\n' % list(actions/actions.sum())
         return log
-
-
-class LinearQNAgent(DQNAgent):
-    def __init__(self,
-                 q_network,
-                 memory,
-                 gamma,
-                 target_update_freq,
-                 num_burn_in,
-                 use_double_q):
-        super(LinearQNAgent, self).__init__(
-            q_network, memory, gamma, target_update_freq, num_burn_in, False)
-
-        self.use_double_q = use_double_q
-        if self.replay_memory is None:
-            assert not self.num_burn_in, self.num_burn_in
-
-    def train(self, env, policy, batch_size, num_iters, eval_args, output_path):
-        log_file = open(os.path.join(output_path, 'train_log.txt'), 'w')
-        state_gpu = torch.cuda.FloatTensor(
-            1, env.num_frames, env.frame_size, env.frame_size)
-        if self.replay_memory is not None:
-            state = self._burn_in(env)
-
-        num_episodes = 0
-        last_eval_milestone = 0
-        rewards = []
-        losses = []
-
-        t = time.time()
-        for i in xrange(num_iters):
-            if env.end:
-                # log and eval
-                num_episodes += 1
-                log = ('Episode: %d, Iter: %d, Reward Sum: %s; Loss: %s\n'
-                       % (num_episodes, i+1, sum(rewards), np.mean(losses)))
-                log += '\tTime taken: %s' % (time.time() - t)
-                if self.replay_memory:
-                    print '---memory size: ', len(self.replay_memory)
-                print '---policy eps: ', policy.epsilon
-
-                if (i+1) / eval_args['eval_per_iter'] > last_eval_milestone:
-                    last_eval_milestone = (i+1) / eval_args['eval_per_iter']
-                    log += '\n'
-                    log += self.eval(
-                        eval_args['eval_env'], eval_args['eval_policy'],
-                        eval_args['num_episodes'])
-
-                print log
-                log_file.write(log+'\n')
-                log_file.flush()
-
-                # main task ...
-                t = time.time()
-                state = env.reset()
-                rewards = []
-
-            state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
-            action = self.select_action(state_gpu, policy)
-            next_state, reward = env.step(action)
-
-            if self.replay_memory is not None:
-                self.replay_memory.append(state, action, reward, next_state, env.end)
-                loss = self._update_q_net(batch_size)
-            else:
-                samples = [core.Sample(state, action, reward, next_state, env.end)]
-                x, a, y = core.samples_to_minibatch(samples, self)
-                loss = self.online_q_net.train_step(x, a, y)
-            state = next_state
-            losses.append(loss)
-            rewards.append(reward)
-            if self.use_double_q and np.random.uniform() > 0.5:
-                # flip networks
-                self.target_q_net, self.online_q_net = \
-                    self.online_q_net, self.target_q_net
-            elif self.replay_memory is None or ((i+1) % self.target_update_freq == 0):
-                    self.target_q_net = copy.deepcopy(self.online_q_net)
-
-            if (i+1) % (num_iters/4) == 0:
-                model_path = os.path.join(output_path, 'net_%d.pth' % ((i+1)/(num_iters/4)))
-                torch.save(self.online_q_net.state_dict(), model_path)
-
-        torch.save(self.online_q_net.state_dict(), os.path.join(output_path, 'net_final.pth'))
-        log = self.eval(eval_args['eval_env'], eval_args['eval_policy'], eval_args['num_episodes_at_end'])
-        log_file.write(log+'\n')
-        log_file.flush()
