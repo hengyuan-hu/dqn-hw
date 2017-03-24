@@ -196,7 +196,8 @@ def samples_to_minibatch(samples, q_agent):
         next_qs = target_q_values.max(1)[0] # max returns a pair
     ys += next_qs.mul_(non_ends).mul_(q_agent.gamma)
     # convert to one-hot
-    actions = actions_mask.scatter_(1, actions, 1)
+    actions_mask = torch.zeros(len(samples), n_actions).cuda() # reset to 0
+    actions = actions_mask.scatter_(1, actions, 1) # scatter only set 1s
 
     assert xs.size(0)==len(samples)
     return xs, actions, ys
