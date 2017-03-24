@@ -78,12 +78,12 @@ def main():
     parser.add_argument('--num_burn_in', default=50000, type=int)
     parser.add_argument('--negative_dead_reward', action='store_true',
                         help='whether die in SpaceInvaders-v0 gives a negative reward')
-    parser.add_argument('--output', default='experiments/test/')
+    parser.add_argument('--output', default='experiments/test')
     parser.add_argument('--algorithm', default='dqn', type=str)
 
     args = parser.parse_args()
     # args.output = get_output_folder(args.output, args.env)
-    args.output = args.output + args.algorithm
+    args.output = '%s_%s' % (args.output, args.algorithm)
     if not os.path.exists(args.output):
         os.makedirs(args.output)
     with open(os.path.join(args.output, 'configs.txt'), 'w') as f:

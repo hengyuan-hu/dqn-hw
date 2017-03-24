@@ -21,7 +21,6 @@ class QNetwork(nn.Module):
         self.net_file = net_file
 
         self.step = 0
-        self.loss_func = nn.functional.smooth_l1_loss
 
         self._build_model()
 
@@ -44,7 +43,7 @@ class QNetwork(nn.Module):
            equivalent to augmenting batch_size by a factor of update_freq
         """
         self.step = (self.step + 1) % self.update_freq
-        err = self.loss(x, a, y) / self.update_freq
+        err = self.loss(x, a, y) # / self.update_freq
         err.backward()
 
         if self.step == 0:
@@ -66,27 +65,71 @@ class DQNetwork(QNetwork):
         conv.add_module('conv2', nn.Conv2d(16, 32, 4, 2))
         conv.add_module('relu2', nn.ReLU(inplace=True))
 
+        # TODO: factor this out as helper
         fake_input = Variable(
-            torch.FloatTensor(1, self.num_frames, self.frame_size,
-                              self.frame_size), volatile=True)
+            torch.FloatTensor(1, self.num_frames, self.frame_size, self.frame_size),
+            volatile=True)
         num_fc_in = conv.forward(fake_input).view(-1).size()[0]
+
+        num_fc_out = 256
         fc = nn.Sequential()
-        fc.add_module('fc1', nn.Linear(num_fc_in, 256))
+        fc.add_module('fc1', nn.Linear(num_fc_in, num_fc_out))
         fc.add_module('fc_relu1', nn.ReLU(inplace=True))
-        fc.add_module('output', nn.Linear(256, self.num_actions))
+
+        q_net = nn.Sequential()
+        q_net.add_module('output', nn.Linear(num_fc_out, self.num_actions))
+
+        predictor = nn.Sequential()
+        predictor.add_module('pd1', nn.Linear(num_fc_out, num_fc_out/2))
+        predictor.add_module('pd_relu1', nn.ReLU(inplace=True))
+        predictor.add_module('pd2', nn.Linear(num_fc_out/2, num_fc_out))
+        predictor.add_module('pd_relu2', nn.ReLU(inplace=True))
 
         self.conv = conv
         self.fc = fc
+        self.q_net = q_net
+        self.predictor = predictor
+
+        # TODO: move this out
         utils.init_net(self, self.net_file)
         self.cuda()
         self.optim = torch.optim.RMSprop(self.parameters(), **self.optim_args)
 
     def forward(self, x):
-        y = self.conv(x)
-        y = y.view(y.size(0), -1)
-        y = self.fc(y)
-        utils.assert_eq(y.dim(), 2)
-        return y
+        feat = self.conv(x)
+        feat = feat.view(feat.size(0), -1)
+        feat = self.fc(feat)
+        utils.assert_eq(feat.dim(), 2)
+
+        q_val = self.q_net(feat)
+        pred_feat = self.predictor(feat)
+        return q_val, feat, pred_feat
+
+    def loss(self, x, a, y, next_feat):
+        utils.assert_eq(a.dim(), 2)
+        q_vals, _, pred_feat = self.forward(Variable(x))
+
+        utils.assert_eq(q_vals.size(), a.size())
+        y_pred = (q_vals * Variable(a)).sum(1)
+        y_err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
+
+        utils.assert_eq(pred_feat.size(), next_feat.size())
+        pred_err = nn.functional.smooth_l1_loss(pred_feat, Variable(next_feat))
+        return y_err, pred_err
+
+    def train_step(self, x, a, y, next_feat):
+        """accum grads and apply every update_freq
+           equivalent to augmenting batch_size by a factor of update_freq
+        """
+        self.step = (self.step + 1) % self.update_freq
+        y_err, pred_err = self.loss(x, a, y, next_feat) # / self.update_freq
+        err = y_err + pred_err
+        err.backward()
+
+        if self.step == 0:
+            self.optim.step()
+            self.zero_grad()
+        return y_err.data[0], pred_err.data[0]
 
 
 class DeeperQNetwork(DQNetwork):

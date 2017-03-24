@@ -11,6 +11,7 @@ import core
 from collections import Counter
 import os
 
+
 class DQNAgent(object):
     """Class implementing DQN.
 
@@ -78,22 +79,22 @@ class DQNAgent(object):
             state = next_state
         return state
 
-    def target_q_values(self, states):
+    def target_q_forward(self, states):
         """Given a batch of states calculate the Q-values.
 
         states: Tensor with size: [batch_size, num_frames, frame_size, frame_size]
         return: Tensor with Q values, evaluated with target_q_net
         """
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
-        q_vals = self.target_q_net(Variable(states, volatile=True)).data
-        utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
-        return q_vals
+        q_vals, feats, pred_feats = self.target_q_net(Variable(states, volatile=True))
+        # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
+        return q_vals.data, feats.data, pred_feats.data
 
     def online_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
-        q_vals = self.online_q_net(Variable(states, volatile=True)).data
-        utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
-        return q_vals
+        q_vals, feat, pred_feat = self.online_q_net(Variable(states, volatile=True))
+        # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
+        return q_vals.data #, feat.data, pred_feat.data
 
     def select_action(self, states, policy):
         """Select the action based on the current state and ONLINE Q Network.
@@ -112,9 +113,9 @@ class DQNAgent(object):
 
     def _update_q_net(self, batch_size):
         samples = self.replay_memory.sample(batch_size)
-        x, a, y = core.samples_to_minibatch(samples, self)
-        loss = self.online_q_net.train_step(x, a, y)
-        return loss
+        x, a, y, next_feat = core.samples_to_minibatch(samples, self)
+        y_loss, pred_loss = self.online_q_net.train_step(x, a, y, next_feat)
+        return y_loss, pred_loss
 
     def train(self, env, policy, batch_size, num_iters, eval_args, output_path):
         # , max_episode_length=None):
@@ -150,18 +151,19 @@ class DQNAgent(object):
         last_eval_milestone = 0
         num_episodes = 0
         rewards = []
-        losses = []
+        y_losses = []
+        pred_losses = []
 
         t = time.time()
         for i in xrange(num_iters):
             if env.end:
                 # log and eval
                 num_episodes += 1
-                log = ('Episode: %d, Iter: %d, Reward Sum: %s; Loss: %s\n'
-                       % (num_episodes, i+1, sum(rewards), np.mean(losses)))
+                log = ('Episode: %d, Iter: %d, Reward: %s; '
+                       % (num_episodes, i+1, sum(rewards)))
+                log += ('y_loss: %s; pred_loss: %s\n'
+                        % (np.mean(y_losses), np.mean(pred_losses)))
                 log += '\tTime taken: %s' % (time.time() - t)
-                print '---memory size: ', len(self.replay_memory)
-                print '---policy eps: ', policy.epsilon
                 milestone = (i+1) / eval_args['eval_per_iter']
                 if milestone > last_eval_milestone:
                     last_eval_milestone = milestone
@@ -178,14 +180,18 @@ class DQNAgent(object):
                 t = time.time()
                 state = env.reset()
                 rewards = []
+                y_losses = []
+                pred_losses = []
 
             state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
             action = self.select_action(state_gpu, policy)
             next_state, reward = env.step(action)
             self.replay_memory.append(state, action, reward, next_state, env.end)
             state = next_state
-            losses.append(self._update_q_net(batch_size))
             rewards.append(reward)
+            y_loss, pred_loss = self._update_q_net(batch_size)
+            y_losses.append(y_loss)
+            pred_losses.append(pred_loss)
 
             if (i+1) % self.target_update_freq == 0:
                 self.target_q_net = copy.deepcopy(self.online_q_net)

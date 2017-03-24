@@ -184,20 +184,21 @@ def samples_to_minibatch(samples, q_agent):
     ys = torch.from_numpy(ys).cuda()
     non_ends = torch.from_numpy(non_ends).cuda()
 
-    target_q_values = q_agent.target_q_values(next_states) # Tensor (b, n_actions)
-    n_actions = target_q_values.size(1)
+    target_q_vals, next_feat, _ = q_agent.target_q_forward(next_states)
+    n_actions = target_q_vals.size(1)
     actions_mask = torch.zeros(len(samples), n_actions).cuda()
     if q_agent.use_double_dqn:
+        assert False, 'not checked yet'
         online_q_values = q_agent.online_q_values(next_states)
         next_actions = online_q_values.max(1)[1] # argmax
         next_actions = actions_mask.scatter_(1, next_actions, 1) # one-hot
-        next_qs = target_q_values.mul_(next_actions).sum(1)
+        next_qs = target_q_vals.mul_(next_actions).sum(1)
     else:
-        next_qs = target_q_values.max(1)[0] # max returns a pair
-    ys += next_qs.mul_(non_ends).mul_(q_agent.gamma)
+        next_qs = target_q_vals.max(1)[0] # max returns a pair
+    ys.add_(next_qs.mul_(non_ends).mul_(q_agent.gamma))
     # convert to one-hot
     actions_mask = torch.zeros(len(samples), n_actions).cuda() # reset to 0
     actions = actions_mask.scatter_(1, actions, 1) # scatter only set 1s
 
-    assert xs.size(0)==len(samples)
-    return xs, actions, ys
+    assert xs.size(0) == len(samples)
+    return xs, actions, ys, next_feat
