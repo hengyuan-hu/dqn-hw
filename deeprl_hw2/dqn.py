@@ -79,20 +79,32 @@ class DQNAgent(object):
             state = next_state
         return state
 
-    def target_q_forward(self, states):
-        """Given a batch of states calculate the Q-values.
+    # def target_q_forward(self, states):
+    #     """Given a batch of states calculate the Q-values.
 
-        states: Tensor with size: [batch_size, num_frames, frame_size, frame_size]
-        return: Tensor with Q values, evaluated with target_q_net
-        """
+    #     states: Tensor with size: [batch_size, num_frames, frame_size, frame_size]
+    #     return: Tensor with Q values, evaluated with target_q_net
+    #     """
+    #     utils.assert_eq(type(states), torch.cuda.FloatTensor)
+    #     q_vals, feats, pred_feats = self.target_q_net(Variable(states, volatile=True))
+    #     # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
+    #     return q_vals.data, feats.data, pred_feats.data
+
+    def target_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
-        q_vals, feats, pred_feats = self.target_q_net(Variable(states, volatile=True))
+        q_vals = self.target_q_net(Variable(states, volatile=True))
         # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
-        return q_vals.data, feats.data, pred_feats.data
+        return q_vals.data #, feat.data, pred_feat.data
+
+    # def online_q_forward(self, states):
+    #     utils.assert_eq(type(states), torch.cuda.FloatTensor)
+    #     q_vals, feats, pred_feats = self.online_q_net(Variable(states, volatile=True))
+    #     # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
+    #     return q_vals.data #, feat.data, pred_feat.data
 
     def online_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
-        q_vals, feats, pred_feats = self.online_q_net(Variable(states, volatile=True))
+        q_vals = self.online_q_net(Variable(states, volatile=True))
         # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
         return q_vals.data #, feat.data, pred_feat.data
 
@@ -113,12 +125,11 @@ class DQNAgent(object):
 
     def _update_q_net(self, batch_size):
         samples = self.replay_memory.sample(batch_size)
-        x, a, y, next_feat = core.samples_to_minibatch(samples, self)
-        y_loss, pred_loss = self.online_q_net.train_step(x, a, y, next_feat)
-        return y_loss, pred_loss
+        x, a, y = core.samples_to_minibatch(samples, self)
+        loss = self.online_q_net.train_step(x, a, y)
+        return loss
 
     def train(self, env, policy, batch_size, num_iters, eval_args, output_path):
-        # , max_episode_length=None):
         """Fit your model to the provided environment.
 
         Its a good idea to print out things like loss, average reward,
@@ -151,18 +162,16 @@ class DQNAgent(object):
         last_eval_milestone = 0
         num_episodes = 0
         rewards = []
-        y_losses = []
-        pred_losses = []
+        losses = []
+        # pred_losses = []
 
         t = time.time()
         for i in xrange(num_iters):
             if env.end:
                 # log and eval
                 num_episodes += 1
-                log = ('Episode: %d, Iter: %d, Reward: %s; '
-                       % (num_episodes, i+1, sum(rewards)))
-                log += ('y_loss: %.4f; pred_loss: %.4f\n'
-                        % (np.mean(y_losses), np.mean(pred_losses)))
+                log = ('Episode: %d, Iter: %d, Reward: %s; loss: %.4f\n'
+                       % (num_episodes, i+1, sum(rewards), np.mean(losses)))
                 log += '\tTime taken: %s' % (time.time() - t)
                 milestone = (i+1) / eval_args['eval_per_iter']
                 if milestone > last_eval_milestone:
@@ -180,8 +189,8 @@ class DQNAgent(object):
                 t = time.time()
                 state = env.reset()
                 rewards = []
-                y_losses = []
-                pred_losses = []
+                losses = []
+                # pred_losses = []
 
             state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
             action = self.select_action(state_gpu, policy)
@@ -189,9 +198,9 @@ class DQNAgent(object):
             self.replay_memory.append(state, action, reward, next_state, env.end)
             state = next_state
             rewards.append(reward)
-            y_loss, pred_loss = self._update_q_net(batch_size)
-            y_losses.append(y_loss)
-            pred_losses.append(pred_loss)
+            loss = self._update_q_net(batch_size)
+            losses.append(loss)
+            # pred_losses.append(pred_loss)
 
             if (i+1) % self.target_update_freq == 0:
                 self.target_q_net = copy.deepcopy(self.online_q_net)

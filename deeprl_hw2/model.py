@@ -37,7 +37,7 @@ class QNetwork(nn.Module):
         q_vals = self.forward(Variable(x))
         utils.assert_eq(q_vals.size(), a.size())
         y_pred = (q_vals * Variable(a)).sum(1)
-        err = self.loss_func(y_pred, Variable(y))
+        err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
         return err
 
     def train_step(self, x, a, y):
@@ -54,7 +54,7 @@ class QNetwork(nn.Module):
         return err.data[0]
 
 
-class DQNetwork(QNetwork):
+class PredDQNetwork(QNetwork):
 
     def _build_model(self, input_shape, num_actions):
         conv = nn.Sequential()
@@ -120,7 +120,7 @@ class DQNetwork(QNetwork):
         return y_err.data[0], pred_err.data[0]
 
 
-class DeeperQNetwork(DQNetwork):
+class DQNetwork(QNetwork):
 
     def _build_model(self, input_shape, num_actions):
         conv = nn.Sequential()
@@ -140,6 +140,13 @@ class DeeperQNetwork(DQNetwork):
 
         self.conv = conv
         self.fc = fc
+
+    def forward(self, x):
+        y = self.conv(x)
+        y = y.view(y.size(0), -1)
+        y = self.fc(y)
+        utils.assert_eq(y.dim(), 2)
+        return y
 
 
 class DuelingQNetwork(QNetwork):

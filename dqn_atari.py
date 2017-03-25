@@ -10,7 +10,7 @@ from deeprl_hw2.env import Environment
 import torch
 from deeprl_hw2.dqn import DQNAgent
 from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
-from deeprl_hw2.model import DQNetwork, DeeperQNetwork, DuelingQNetwork
+from deeprl_hw2.model import PredDQNetwork, DQNetwork, DuelingQNetwork
 from deeprl_hw2.core import ReplayMemory
 
 
@@ -64,7 +64,7 @@ def main():
                         help='min squared gradient for RMS prop')
     parser.add_argument('--q_net', default='', type=str, help='load pretrained q net')
     parser.add_argument('--gamma', default=0.99, type=float, help='discount factor')
-    parser.add_argument('--num_iters', default=5000000, type=int)
+    parser.add_argument('--num_iters', default=50000000, type=int)
     parser.add_argument('--replay_buffer_size', default=1000000, type=int)
     parser.add_argument('--num_frames', default=4, type=int, help='nframe, QNet input')
     parser.add_argument('--frame_size', default=84, type=int)
@@ -127,10 +127,10 @@ if __name__ == '__main__':
 
     if 'dueling' == args.algorithm:
         QNClass = DuelingQNetwork
+    elif 'pdqn' == args.algorithm:
+        QNClass = PredDQNetwork
     elif 'dqn' == args.algorithm:
         QNClass = DQNetwork
-    elif 'deeper_qn' == args.algorithm:
-        QNClass = DeepQNetwork
     else:
         assert False, '%s is not implemented yet' % args.algorithm
 

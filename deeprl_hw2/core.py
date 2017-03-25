@@ -9,25 +9,31 @@ import numpy as np
 class Sample(object):
     def __init__(self, state, action, reward, next_state, end):
         utils.assert_eq(type(state), type(next_state))
-        # merge two states internally and clip to uint8 to save memory
-        self._packed_frames = np.packbits(
-            np.vstack([state, next_state]).astype(np.uint8, copy=False),axis=0)
+        self._merged_frames = np.vstack(
+            (state, next_state[-1:])).astype(np.uint8, copy=False)
         self.action = action
         self.reward = reward
         self.end = end
 
-    def get_state_and_next_state(self):
-        unpacked_frames = np.unpackbits(self._packed_frames, axis=0)
-        unpacked_frames = unpacked_frames.astype(np.float32, copy=False)
-        state = unpacked_frames[:4]
-        next_state = unpacked_frames[4:]
-        return state, next_state
+    @property
+    def state(self):
+        return self._merged_frames[:-1].astype(np.float32, copy=False)
+
+    @property
+    def next_state(self):
+        return self._merged_frames[1:].astype(np.float32, copy=False)
+
+    # def get_state_and_next_state(self):
+    #     unpacked_frames = np.unpackbits(self._packed_frames, axis=0)
+    #     unpacked_frames = unpacked_frames.astype(np.float32, copy=False)
+    #     state = unpacked_frames[:4]
+    #     next_state = unpacked_frames[4:]
+    #     return state, next_state
 
     def __repr__(self):
-        state, next_state = self.get_state_and_next_state()
         info = ('S(mean): %3.4f, A: %s, R: %s, NS(mean): %3.4f, End: %s'
-                % (state.mean(), self.action, self.reward,
-                   next_state.mean(), self.end))
+                % (self.state.mean(), self.action, self.reward,
+                   self.next_state.mean(), self.end))
         return info
 
 
@@ -80,40 +86,39 @@ def samples_to_minibatch(samples, q_agent):
         ys: (b, 1) FloatTensor
     """
     assert len(samples) > 0
-    dummy_state, _ = samples[0].get_state_and_next_state()
+    dummy_state = samples[0].state
 
     states = np.zeros((len(samples),) + dummy_state.shape, dtype=np.float32)
     next_states = np.zeros_like(states)
-    ys = np.zeros((len(samples), 1), dtype=np.float32)
-    actions = np.zeros_like(ys, dtype=np.int64)
-    non_ends = np.zeros_like(ys)
+    rewards = np.zeros((len(samples), 1), dtype=np.float32)
+    actions = np.zeros_like(rewards, dtype=np.int64)
+    non_ends = np.zeros_like(rewards)
     for i, s in enumerate(samples):
-        states[i], next_states[i] = s.get_state_and_next_state()
-        ys[i] = s.reward
+        states[i] = s.state
+        next_states[i] = s.next_state
+        rewards[i] = s.reward
         actions[i] = s.action
         non_ends[i] = 0.0 if s.end else 1.0
 
-    xs = torch.from_numpy(states).cuda()
-    next_states = torch.from_numpy(next_states).cuda()
+    states = torch.from_numpy(states).cuda()
     actions = torch.from_numpy(actions).cuda()
-    ys = torch.from_numpy(ys).cuda()
+    ys = torch.from_numpy(rewards).cuda()
+    next_states = torch.from_numpy(next_states).cuda()
     non_ends = torch.from_numpy(non_ends).cuda()
 
-    target_q_vals, next_feat, _ = q_agent.target_q_forward(next_states)
+    target_q_vals = q_agent.target_q_values(next_states)
     n_actions = target_q_vals.size(1)
-    actions_mask = torch.zeros(len(samples), n_actions).cuda()
+    actions_one_hot = torch.zeros(len(samples), n_actions).cuda()
+    actions_one_hot.scatter_(1, actions, 1)
+
     if q_agent.use_double_dqn:
-        assert False, 'not checked yet'
         online_q_values = q_agent.online_q_values(next_states)
         next_actions = online_q_values.max(1)[1] # argmax
-        next_actions = actions_mask.scatter_(1, next_actions, 1) # one-hot
-        next_qs = target_q_vals.mul_(next_actions).sum(1)
+        next_actions_one_hot = torch.zeros(len(samples), n_actions).cuda()
+        next_actions_one_hot.scatter_(1, next_actions, 1)
+        next_qs = (target_q_vals * next_actions_one_hot).sum(1)
     else:
         next_qs = target_q_vals.max(1)[0] # max returns a pair
     ys.add_(next_qs.mul_(non_ends).mul_(q_agent.gamma))
-    # convert to one-hot
-    actions_mask = torch.zeros(len(samples), n_actions).cuda() # reset to 0
-    actions = actions_mask.scatter_(1, actions, 1) # scatter only set 1s
-
-    assert xs.size(0) == len(samples)
-    return xs, actions, ys, next_feat
+    assert states.size(0) == len(samples)
+    return states, actions_one_hot, ys
