@@ -15,41 +15,14 @@ import os
 class DQNAgent(object):
     """Class implementing DQN.
 
-    This is a basic outline of the functions/parameters you will need
-    in order to implement the DQNAgnet. This is just to get you
-    started. You may need to tweak the parameters, add new ones, etc.
-
-    Feel free to change the functions and funciton parameters that the
-    class provides.
-
-    We have provided docstrings to go along with our suggested API.
-
     Parameters
     ----------
-    q_network: keras.models.Model
-      Your Q-network model.
-    preprocessor: deeprl_hw2.core.Preprocessor
-      The preprocessor class. See the associated classes for more
-      details.
-    memory: deeprl_hw2.core.Memory
-      Your replay memory.
-    gamma: float
-      Discount factor.
-    target_update_freq: float
-      Frequency to update the target network. You can either provide a
-      number representing a soft target update (see utils.py) or a
-      hard target update (see utils.py and Atari paper.)
-    num_burn_in: int
-      Before you begin updating the Q-network your replay memory has
-      to be filled up with some number of samples. This number says
-      how many.
+    q_network: torch.nn.Module
+    memory: replay memory.
+    gamma: discount factor.
+    target_update_freq: frequency to sync target and online qs
+    num_burn_in: fill the memory before training starts
     use_double_dqn: boolean
-      Whether to use target q or online q to calculate next_state action
-      during sampling.
-    use_double_q: boolean
-      Whether to occasionally flip target and online. Only for Linear
-    batch_size: int
-      How many samples in each minibatch.
     """
     def __init__(self,
                  q_network,
@@ -111,30 +84,6 @@ class DQNAgent(object):
         return loss
 
     def train(self, env, policy, batch_size, num_iters, eval_args, output_path):
-        """Fit your model to the provided environment.
-
-        Its a good idea to print out things like loss, average reward,
-        Q-values, etc to see if your agent is actually improving.
-
-        You should probably also periodically save your network
-        weights and any other useful info.
-
-        This is where you should sample actions from your network,
-        collect experience samples and add them to your replay memory,
-        and update your network parameters.
-
-        Parameters
-        ----------
-        env: gym.Env
-          This is your Atari environment. You should wrap the
-          environment using the wrap_atari_env function in the
-          utils.py
-        num_iterations: int
-          How many samples/updates to perform.
-        max_episode_length: int
-          How long a single episode should last before the agent
-          resets. Can help exploration.
-        """
         log_file = open(os.path.join(output_path, 'train_log.txt'), 'w')
         state_gpu = torch.cuda.FloatTensor(
             1, env.num_frames, env.frame_size, env.frame_size)
