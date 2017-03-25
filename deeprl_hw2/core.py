@@ -23,13 +23,6 @@ class Sample(object):
     def next_state(self):
         return self._merged_frames[1:].astype(np.float32, copy=False)
 
-    # def get_state_and_next_state(self):
-    #     unpacked_frames = np.unpackbits(self._packed_frames, axis=0)
-    #     unpacked_frames = unpacked_frames.astype(np.float32, copy=False)
-    #     state = unpacked_frames[:4]
-    #     next_state = unpacked_frames[4:]
-    #     return state, next_state
-
     def __repr__(self):
         info = ('S(mean): %3.4f, A: %s, R: %s, NS(mean): %3.4f, End: %s'
                 % (self.state.mean(), self.action, self.reward,

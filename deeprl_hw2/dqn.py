@@ -79,34 +79,15 @@ class DQNAgent(object):
             state = next_state
         return state
 
-    # def target_q_forward(self, states):
-    #     """Given a batch of states calculate the Q-values.
-
-    #     states: Tensor with size: [batch_size, num_frames, frame_size, frame_size]
-    #     return: Tensor with Q values, evaluated with target_q_net
-    #     """
-    #     utils.assert_eq(type(states), torch.cuda.FloatTensor)
-    #     q_vals, feats, pred_feats = self.target_q_net(Variable(states, volatile=True))
-    #     # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
-    #     return q_vals.data, feats.data, pred_feats.data
-
     def target_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
         q_vals = self.target_q_net(Variable(states, volatile=True))
-        # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
-        return q_vals.data #, feat.data, pred_feat.data
-
-    # def online_q_forward(self, states):
-    #     utils.assert_eq(type(states), torch.cuda.FloatTensor)
-    #     q_vals, feats, pred_feats = self.online_q_net(Variable(states, volatile=True))
-    #     # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
-    #     return q_vals.data #, feat.data, pred_feat.data
+        return q_vals.data
 
     def online_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
         q_vals = self.online_q_net(Variable(states, volatile=True))
-        # utils.assert_eq(type(q_vals), torch.cuda.FloatTensor)
-        return q_vals.data #, feat.data, pred_feat.data
+        return q_vals.data
 
     def select_action(self, states, policy):
         """Select the action based on the current state and ONLINE Q Network.

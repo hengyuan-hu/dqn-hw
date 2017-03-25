@@ -6,21 +6,21 @@ from collections import deque
 import numpy as np
 from scipy.misc import imsave
 
-def preprocess_frame(observ, output_size):
-    # to grayscale, resize, scale to [0, 1]
-    # !!! NO CROP (different from original)
-    gray = cv2.cvtColor(observ, cv2.COLOR_RGB2GRAY)
-    output = cv2.resize(gray, (output_size, output_size))
-    output = output.astype(np.float32)
-    output[output>0] = 1.0
-    #imsave('frame.png', output)
-    return output
 
 SPACE_INVADERS_INIT_LIVES = 3
 
+
+def preprocess_frame(observ, output_size):
+    gray = cv2.cvtColor(observ, cv2.COLOR_RGB2GRAY)
+    output = cv2.resize(gray, (output_size, output_size))
+    output = output.astype(np.float32)
+    return output
+
+
 class Environment(object):
-    def __init__(self, name, num_frames, frame_size, record=False, mnt_path=None,
-                 video_callable=None, write_upon_reset=True, negative_dead_reward=False):
+    def __init__(self, name, num_frames, frame_size,
+                 record=False, mnt_path=None, video_callable=None,
+                 write_upon_reset=True, negative_dead_reward=False):
         assert num_frames>0
         self.env = gym.make(name)
         self.name = name
@@ -98,6 +98,7 @@ class Environment(object):
 
     def seed(self, seed=None):
         self.env.seed(seed)
+
 
 if __name__ == '__main__':
      env = gym.make('SpaceInvaders-v0')
