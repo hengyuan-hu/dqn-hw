@@ -13,7 +13,7 @@ SPACE_INVADERS_INIT_LIVES = 3
 def preprocess_frame(observ, output_size):
     gray = cv2.cvtColor(observ, cv2.COLOR_RGB2GRAY)
     output = cv2.resize(gray, (output_size, output_size))
-    output = output.astype(np.float32)
+    output = output.astype(np.float32, copy=False) / 255.0
     return output
 
 
