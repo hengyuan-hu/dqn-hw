@@ -8,10 +8,10 @@ import tensorflow #TODO: remove this
 # always import env (import cv2) first, to avoid opencv magic
 from deeprl_hw2.env import Environment
 import torch
-from deeprl_hw2.dqn import DQNAgent
-from deeprl_hw2.policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
-from deeprl_hw2.model import PredDQNetwork, DQNetwork, DuelingQNetwork
-from deeprl_hw2.core import ReplayMemory
+from dqn import DQNAgent
+from policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
+from model import PredDQNetwork, DQNetwork, DuelingQNetwork
+from core import ReplayMemory
 
 
 def get_output_folder(parent_dir, env_name):
