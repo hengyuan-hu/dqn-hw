@@ -16,6 +16,7 @@ class Logger(object):
         for key, vals in self.infos.iteritems():
             msgs.append('%s %.6f' % (key, np.mean(vals)))
         msg = '\n'.join(msgs)
-        print msg
         self.log_file.write(msg + '\n')
         self.log_file.flush()
+        self.infos = {}
+        return msg
