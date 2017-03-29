@@ -138,14 +138,12 @@ if __name__ == '__main__':
     q_net = QNClass(args.num_frames,
                     args.frame_size,
                     env.num_actions,
-                    args.update_freq,
                     optim_args,
                     args.q_net)
     agent = DQNAgent(q_net,
                      replay_memory,
                      args.gamma,
                      args.target_q_sync_interval,
-                     # args.num_burn_in,
                      args.use_double_dqn)
     eval_args = {
         'eval_env': eval_env,
@@ -157,7 +155,7 @@ if __name__ == '__main__':
 
     agent.burn_in(env, args.num_burn_in)
     agent.train(
-        env, train_policy, args.batch_size, args.num_iters,
+        env, train_policy, args.batch_size, args.num_iters, args.update_freq,
         eval_args, logger, args.output)
 
     # fianl eval

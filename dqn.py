@@ -83,7 +83,8 @@ class DQNAgent(object):
         loss = self.online_q_net.train_step(x, a, y)
         return loss
 
-    def train(self, env, policy, batch_size, num_iters, eval_args, logger, output_path):
+    def train(self, env, policy, batch_size, num_iters, update_freq,
+              eval_args, logger, output_path):
         last_eval_milestone = 0
         num_episodes = 0
         prev_eps_iters = 0
@@ -102,8 +103,9 @@ class DQNAgent(object):
             self.replay_memory.append(state, action, reward, next_state, env.end)
             state = next_state
             rewards += reward
-            loss = self._update_q_net(batch_size)
-            logger.append('loss', loss)
+            if (i+1) % update_freq == 0:
+                loss = self._update_q_net(batch_size)
+                logger.append('loss', loss)
 
             if env.end:
                 # log and eval
@@ -122,7 +124,7 @@ class DQNAgent(object):
                                          eval_args['num_episodes'])
                     print logger.log(eval_log)
 
-            if (i+1) % self.target_update_freq == 0:
+            if (i+1) % (update_freq * self.target_update_freq) == 0:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
             if (i+1) % (num_iters/4) == 0:
                 model_path = os.path.join(

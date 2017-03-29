@@ -6,16 +6,13 @@ import utils
 
 
 class QNetwork(nn.Module):
-    def __init__(self, num_frames, frame_size, num_actions,
-                 update_freq, optim_args, net_file):
+    def __init__(self, num_frames, frame_size, num_actions, optim_args, net_file):
         """
         num_frames: i.e. num of channels of input
         frame_size: int, frame has to be square for simplicity
         num_actions: i.e. num of output Q values
         """
         super(QNetwork, self).__init__()
-        self.update_freq = update_freq
-        self.step = 0
 
         self._build_model((num_frames, frame_size, frame_size), num_actions)
         utils.init_net(self, net_file)
@@ -41,16 +38,10 @@ class QNetwork(nn.Module):
         return err
 
     def train_step(self, x, a, y):
-        """accum grads and apply every update_freq
-           equivalent to augmenting batch_size by a factor of update_freq
-        """
-        self.step = (self.step + 1) % self.update_freq
-        err = self.loss(x, a, y) # / self.update_freq
+        err = self.loss(x, a, y)
         err.backward()
-
-        if self.step == 0:
-            self.optim.step()
-            self.zero_grad()
+        self.optim.step()
+        self.zero_grad()
         return err.data[0]
 
 
@@ -118,14 +109,12 @@ class PredDQNetwork(QNetwork):
         """accum grads and apply every update_freq
            equivalent to augmenting batch_size by a factor of update_freq
         """
-        self.step = (self.step + 1) % self.update_freq
         y_err, pred_err = self.loss(x, a, y, next_feat) # / self.update_freq
         err = y_err + pred_err
         err.backward()
 
-        if self.step == 0:
-            self.optim.step()
-            self.zero_grad()
+        self.optim.step()
+        self.zero_grad()
         return y_err.data[0], pred_err.data[0]
 
 
