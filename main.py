@@ -4,14 +4,15 @@ import argparse
 import os
 import random
 import numpy as np
-import tensorflow #TODO: remove this
+import tensorflow # TODO: remove this
 # always import env (import cv2) first, to avoid opencv magic
-from deeprl_hw2.env import Environment
+from env import Environment
 import torch
 from dqn import DQNAgent
 from policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
 from model import PredDQNetwork, DQNetwork, DuelingQNetwork
 from core import ReplayMemory
+from logger import Logger
 
 
 def get_output_folder(parent_dir, env_name):
@@ -144,14 +145,22 @@ if __name__ == '__main__':
                      replay_memory,
                      args.gamma,
                      args.target_q_sync_interval,
-                     args.num_burn_in,
+                     # args.num_burn_in,
                      args.use_double_dqn)
     eval_args = {
         'eval_env': eval_env,
         'eval_per_iter': 100000,
         'eval_policy': eval_policy,
         'num_episodes': 20,
-        'num_episodes_at_end' : 100
     }
+    logger = Logger(os.path.join(args.output, 'train_log.txt'))
+
+    agent.burn_in(env, args.num_burn_in)
     agent.train(
-        env, train_policy, args.batch_size, args.num_iters, eval_args, args.output)
+        env, train_policy, args.batch_size, args.num_iters,
+        eval_args, logger, args.output)
+
+    # fianl eval
+    eval_log = agent.eval(eval_env, eval_policy, 100)
+    # eval_env.reset() # finish the recording for the very last episode (?)
+    print logger.log(eval_log)

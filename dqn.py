@@ -29,7 +29,6 @@ class DQNAgent(object):
                  memory,
                  gamma,
                  target_update_freq,
-                 num_burn_in,
                  use_double_dqn):
         self.online_q_net = q_network
         self.target_q_net = copy.deepcopy(q_network)
@@ -37,20 +36,21 @@ class DQNAgent(object):
         self.replay_memory = memory
         self.gamma = gamma
         self.target_update_freq = target_update_freq
-        self.num_burn_in = num_burn_in
         self.use_double_dqn = use_double_dqn
 
-    def _burn_in(self, env):
+    def burn_in(self, env, num_burn_in):
         policy = GreedyEpsilonPolicy(1) # uniform policy
         dummy_q_values = np.zeros(env.num_actions)
-        for i in xrange(self.num_burn_in):
+        i = 0
+        while i < num_burn_in or not env.end:
             if env.end:
                 state = env.reset()
             action = policy(dummy_q_values)
             next_state, reward = env.step(action)
             self.replay_memory.append(state, action, reward, next_state, env.end)
             state = next_state
-        return state
+            i += 1
+        print '%d frames are burned into the memory.' % i
 
     def target_q_values(self, states):
         utils.assert_eq(type(states), torch.cuda.FloatTensor)
@@ -83,54 +83,44 @@ class DQNAgent(object):
         loss = self.online_q_net.train_step(x, a, y)
         return loss
 
-    def train(self, env, policy, batch_size, num_iters, eval_args, output_path):
-        log_file = open(os.path.join(output_path, 'train_log.txt'), 'w')
-        state_gpu = torch.cuda.FloatTensor(
-            1, env.num_frames, env.frame_size, env.frame_size)
-        state = self._burn_in(env)
-
+    def train(self, env, policy, batch_size, num_iters, eval_args, logger, output_path):
         last_eval_milestone = 0
         num_episodes = 0
-        rewards = []
-        losses = []
-        # pred_losses = []
+        prev_eps_iters = 0
 
-        t = time.time()
+        state_gpu = torch.cuda.FloatTensor(
+            1, env.num_frames, env.frame_size, env.frame_size)
         for i in xrange(num_iters):
             if env.end:
-                # log and eval
-                num_episodes += 1
-                log = ('Episode: %d, Iter: %d, Reward: %s; loss: %.4f\n'
-                       % (num_episodes, i+1, sum(rewards), np.mean(losses)))
-                log += '\tTime taken: %s' % (time.time() - t)
-                milestone = (i+1) / eval_args['eval_per_iter']
-                if milestone > last_eval_milestone:
-                    last_eval_milestone = milestone
-                    log += '\n'
-                    log += self.eval(
-                        eval_args['eval_env'], eval_args['eval_policy'],
-                        eval_args['num_episodes'])
-
-                print log
-                log_file.write(log+'\n')
-                log_file.flush()
-
-                # main task ...
                 t = time.time()
                 state = env.reset()
-                rewards = []
-                losses = []
-                # pred_losses = []
+                rewards = 0
 
             state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
             action = self.select_action(state_gpu, policy)
             next_state, reward = env.step(action)
             self.replay_memory.append(state, action, reward, next_state, env.end)
             state = next_state
-            rewards.append(reward)
+            rewards += reward
             loss = self._update_q_net(batch_size)
-            losses.append(loss)
-            # pred_losses.append(pred_loss)
+            logger.append('loss', loss)
+
+            if env.end:
+                # log and eval
+                fps = (i+1-prev_eps_iters) / (time.time()-t)
+                log_msg = ('Episode: %d, Iter: %d, Reward: %d; Fps: %.2f'
+                           % (num_episodes+1, i+1, rewards, fps))
+                print logger.log(log_msg)
+                num_episodes += 1
+                prev_eps_iters = i+1
+
+                milestone = (i+1) / eval_args['eval_per_iter']
+                if milestone > last_eval_milestone:
+                    last_eval_milestone = milestone
+                    eval_log = self.eval(eval_args['eval_env'],
+                                         eval_args['eval_policy'],
+                                         eval_args['num_episodes'])
+                    print logger.log(eval_log)
 
             if (i+1) % self.target_update_freq == 0:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
@@ -138,15 +128,6 @@ class DQNAgent(object):
                 model_path = os.path.join(
                     output_path, 'net_%d.pth' % ((i+1)/(num_iters/4)))
                 torch.save(self.online_q_net.state_dict(), model_path)
-
-        torch.save(self.online_q_net.state_dict(),
-                   os.path.join(output_path, 'net_final.pth'))
-        log = self.eval(eval_args['eval_env'],
-                        eval_args['eval_policy'],
-                        eval_args['num_episodes_at_end'])
-        eval_args['eval_env'].reset() # finish the recording for the very last episode
-        log_file.write(log+'\n')
-        log_file.flush()
 
     def eval(self, env, policy, num_episodes, max_episode_length=None):
         """Test your agent with a provided environment.
