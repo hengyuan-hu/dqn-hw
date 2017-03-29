@@ -106,7 +106,7 @@ class PredDQNetwork(QNetwork):
         y_err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
 
         print 'pred_feat:', pred_feat[0]
-        print 'a': a[0]
+        print 'a', a[0]
         a_feat = Variable(a.view(a.size() + (1,)).expand_as(pred_feat))
         pred_feat = (pred_feat * a_feat).sum(1).squeeze() # sum out action dim
         print 'after process: pred_feat:', pred_feat[0]
