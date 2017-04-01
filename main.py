@@ -7,7 +7,7 @@ import tensorflow # TODO: remove this
 # always import env (import cv2) first, to avoid opencv magic
 from env import Environment
 import torch
-from dqn import DQNAgent
+from dqn import DQNAgent, PredDQNAgent
 from policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
 from model import PredDQNetwork, DQNetwork, DuelingQNetwork
 from core import ReplayMemory
@@ -126,10 +126,13 @@ if __name__ == '__main__':
 
     if 'dueling' == args.algorithm:
         QNClass = DuelingQNetwork
+        AgentClass = DQNAgent
     elif 'pdqn' == args.algorithm:
         QNClass = PredDQNetwork
+        AgentClass = PredDQNAgent
     elif 'dqn' == args.algorithm:
         QNClass = DQNetwork
+        AgentClass = DQNAgent
     else:
         assert False, '%s is not implemented yet' % args.algorithm
 
@@ -138,11 +141,11 @@ if __name__ == '__main__':
                     env.num_actions,
                     optim_args,
                     args.q_net)
-    agent = DQNAgent(q_net,
-                     replay_memory,
-                     args.gamma,
-                     args.target_q_sync_interval,
-                     args.use_double_dqn)
+    agent = AgentClass(q_net,
+                       replay_memory,
+                       args.gamma,
+                       args.target_q_sync_interval,
+                       args.use_double_dqn)
     eval_args = {
         'eval_env': eval_env,
         'eval_per_iter': 100000,

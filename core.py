@@ -65,19 +65,7 @@ class ReplayMemory(object):
         self.oldest_idx = 0
 
 
-def samples_to_minibatch(samples, q_agent):
-    """[samples] -> minibatch (xs, as, ys)
-    convert [sample.state] to input tensor xs
-    compute target tensor ys according to whether terminate and q_network
-    it is possible to have only one kind of sample (all term/non-term)
-    q_agent.use_double_dqn:
-        True: y = r + targetQ(s', argmax_a'(onlineQ(s',a')))
-        False: y = r + max_a'(onlineQ(s',a'))
-    return: Tensors that can be directly used by q_network
-        xs: (b, ?) FloatTensor
-        as: (b, n_actions) one-hot FloatTensor
-        ys: (b, 1) FloatTensor
-    """
+def _samples_to_tensors(samples):
     assert len(samples) > 0
     dummy_state = samples[0].state
 
@@ -95,11 +83,32 @@ def samples_to_minibatch(samples, q_agent):
 
     states = torch.from_numpy(states).cuda()
     actions = torch.from_numpy(actions).cuda()
-    ys = torch.from_numpy(rewards).cuda()
+    rewards = torch.from_numpy(rewards).cuda()
     next_states = torch.from_numpy(next_states).cuda()
     non_ends = torch.from_numpy(non_ends).cuda()
 
-    target_q_vals = q_agent.target_q_values(next_states)
+    return states, actions, rewards, next_states, non_ends
+
+
+def samples_to_minibatch(samples, q_agent, need_target_feat=False):
+    """[samples] -> minibatch (xs, as, ys)
+    convert [sample.state] to input tensor xs
+    compute target tensor ys according to whether terminate and q_network
+    it is possible to have only one kind of sample (all term/non-term)
+    q_agent.use_double_dqn:
+        True: y = r + targetQ(s', argmax_a'(onlineQ(s',a')))
+        False: y = r + max_a'(onlineQ(s',a'))
+    return: Tensors that can be directly used by q_network
+        xs: (b, ?) FloatTensor
+        as: (b, n_actions) one-hot FloatTensor
+        ys: (b, 1) FloatTensor
+    """
+    states, actions, ys, next_states, non_ends = _samples_to_tensors(samples)
+
+    if need_target_feat:
+        target_q_vals, target_feat = q_agent.target_q_values(next_states)
+    else:
+        target_q_vals = q_agent.target_q_values(next_states)
     n_actions = target_q_vals.size(1)
     actions_one_hot = torch.zeros(len(samples), n_actions).cuda()
     actions_one_hot.scatter_(1, actions, 1)
@@ -113,5 +122,8 @@ def samples_to_minibatch(samples, q_agent):
     else:
         next_qs = target_q_vals.max(1)[0] # max returns a pair
     ys.add_(next_qs.mul_(non_ends).mul_(q_agent.gamma))
-    assert states.size(0) == len(samples)
-    return states, actions_one_hot, ys
+
+    if need_target_feat:
+        return states, actions_one_hot, ys, target_feat
+    else:
+        return states, actions_one_hot, ys

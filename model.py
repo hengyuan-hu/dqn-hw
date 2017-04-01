@@ -75,32 +75,30 @@ class PredDQNetwork(QNetwork):
         self.q_net = q_net
         self.predictor = predictor
 
-    def forward(self, x):
+    def forward(self, x, pred):
         feat = self.conv(x)
         feat = feat.view(feat.size(0), -1)
         feat = self.fc(feat)
         utils.assert_eq(feat.dim(), 2)
 
         q_val = self.q_net(feat)
-        pred_feat = self.predictor(feat)
-        # pred_feat shape: [batch, num_action, num_feat]
-        pred_feat = pred_feat.view(feat.size(0), q_val.size(1), feat.size(1))
-        print 'pred_feat shape:', pred_feat.size()
+        pred_feat = None
+        if pred:
+            pred_feat = self.predictor(feat)
+            # pred_feat shape: [batch, num_action, num_feat]
+            pred_feat = pred_feat.view(feat.size(0), q_val.size(1), feat.size(1))
         return q_val, feat, pred_feat
 
     def loss(self, x, a, y, next_feat):
         utils.assert_eq(a.dim(), 2)
-        q_vals, _, pred_feat = self.forward(Variable(x))
+        q_vals, _, pred_feat = self.forward(Variable(x), True)
 
         utils.assert_eq(q_vals.size(), a.size())
         y_pred = (q_vals * Variable(a)).sum(1)
         y_err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
 
-        print 'pred_feat:', pred_feat[0]
-        print 'a', a[0]
         a_feat = Variable(a.view(a.size() + (1,)).expand_as(pred_feat))
         pred_feat = (pred_feat * a_feat).sum(1).squeeze() # sum out action dim
-        print 'after process: pred_feat:', pred_feat[0]
         utils.assert_eq(pred_feat.size(), next_feat.size())
         pred_err = nn.functional.smooth_l1_loss(pred_feat, Variable(next_feat))
         return y_err, pred_err

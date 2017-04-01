@@ -164,3 +164,21 @@ class DQNAgent(object):
         log += eps_log
         log += '>>>Eval: actions dist: %s\n' % list(actions/actions.sum())
         return log
+
+
+class PredDQNAgent(DQNAgent):
+    def target_q_values(self, states):
+        utils.assert_eq(type(states), torch.cuda.FloatTensor)
+        q_vals, feat, _ = self.target_q_net(Variable(states, volatile=True), False)
+        return q_vals.data, feat.data
+
+    def online_q_values(self, states):
+        utils.assert_eq(type(states), torch.cuda.FloatTensor)
+        q_vals, _, _ = self.online_q_net(Variable(states, volatile=True), False)
+        return q_vals.data
+
+    def _update_q_net(self, batch_size):
+        samples = self.replay_memory.sample(batch_size)
+        x, a, y, target_feat = core.samples_to_minibatch(samples, self, True)
+        loss = self.online_q_net.train_step(x, a, y, target_feat)
+        return loss
