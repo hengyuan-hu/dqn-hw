@@ -182,5 +182,5 @@ class PredDQNAgent(DQNAgent):
         x, a, y, target_feat = core.samples_to_minibatch(samples, self, True)
         q_loss, pred_loss = self.online_q_net.train_step(x, a, y, target_feat)
         logger.append('q_loss', q_loss)
-        logger.append('pred_loss', pred__loss)
+        logger.append('pred_loss', pred_loss)
         return loss
