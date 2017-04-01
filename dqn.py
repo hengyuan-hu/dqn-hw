@@ -82,7 +82,6 @@ class DQNAgent(object):
         x, a, y = core.samples_to_minibatch(samples, self)
         loss = self.online_q_net.train_step(x, a, y)
         logger.append('loss', loss)
-        return loss
 
     def train(self, env, policy, batch_size, num_iters, update_freq,
               eval_args, logger, output_path):
@@ -183,4 +182,3 @@ class PredDQNAgent(DQNAgent):
         q_loss, pred_loss = self.online_q_net.train_step(x, a, y, target_feat)
         logger.append('q_loss', q_loss)
         logger.append('pred_loss', pred_loss)
-        return loss
