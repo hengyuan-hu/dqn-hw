@@ -77,10 +77,11 @@ class DQNAgent(object):
         action = policy(q_vals.cpu().numpy())
         return action
 
-    def _update_q_net(self, batch_size):
+    def _update_q_net(self, batch_size, logger):
         samples = self.replay_memory.sample(batch_size)
         x, a, y = core.samples_to_minibatch(samples, self)
         loss = self.online_q_net.train_step(x, a, y)
+        logger.append('loss', loss)
         return loss
 
     def train(self, env, policy, batch_size, num_iters, update_freq,
@@ -104,8 +105,7 @@ class DQNAgent(object):
             state = next_state
             rewards += reward
             if (i+1) % update_freq == 0:
-                loss = self._update_q_net(batch_size)
-                logger.append('loss', loss)
+                self._update_q_net(batch_size, logger)
 
             if env.end:
                 # log and eval
@@ -177,8 +177,10 @@ class PredDQNAgent(DQNAgent):
         q_vals, _, _ = self.online_q_net(Variable(states, volatile=True), False)
         return q_vals.data
 
-    def _update_q_net(self, batch_size):
+    def _update_q_net(self, batch_size, logger):
         samples = self.replay_memory.sample(batch_size)
         x, a, y, target_feat = core.samples_to_minibatch(samples, self, True)
-        loss = self.online_q_net.train_step(x, a, y, target_feat)
+        q_loss, pred_loss = self.online_q_net.train_step(x, a, y, target_feat)
+        logger.append('q_loss', q_loss)
+        logger.append('pred_loss', pred__loss)
         return loss
