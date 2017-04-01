@@ -28,7 +28,7 @@ class Environment(object):
             def capture_all(episode_id):
                 return True
             def capture_every_twenty(episode_id):
-                return episode_id % 20==0 # return first of each eval
+                return (episode_id % 20) == 0 # return first of each eval
             if mnt_path is None:
                 mnt_path = './monitor/'
             if video_callable is None:
@@ -43,7 +43,6 @@ class Environment(object):
         self.total_reward = 0.0
         self.frames_queue = deque(maxlen=4)
         self.negative_dead_reward = negative_dead_reward
-        # leave reset to user, as in env
 
     def reset(self):
         """reset env and frame queue, return initial state """
@@ -88,7 +87,7 @@ class Environment(object):
         if (self.negative_dead_reward
             and self.name == 'SpaceInvaders-v0'
             and info['ale.lives'] < self.lives):
-            reward = -1.0
+            reward -= -1.0
             self.lives = info['ale.lives']
 
         return np.array(self.frames_queue), reward#, self.end, info

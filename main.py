@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Run Atari Environment with DQN."""
 import argparse
 import os
@@ -84,7 +83,6 @@ def main():
     parser.add_argument('--algorithm', default='dqn', type=str)
 
     args = parser.parse_args()
-    # args.output = get_output_folder(args.output, args.env)
     args.output = '%s_%s' % (args.output, args.algorithm)
     if not os.path.exists(args.output):
         os.makedirs(args.output)
@@ -122,7 +120,7 @@ if __name__ == '__main__':
     optim_args = {
         'lr': args.lr,
         'alpha': args.alpha,
-        #'momentum': args.momentum, # only available in dev version
+        # 'momentum': args.momentum, # only available in dev version
         'eps': args.rms_eps
     }
 
