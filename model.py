@@ -149,21 +149,24 @@ class DuelingQNetwork(QNetwork):
 
     def _build_model(self, input_shape, num_actions):
         conv = nn.Sequential()
-        conv.add_module('conv1', nn.Conv2d(input_shape[0], 16, 8, 4))
+        conv.add_module('conv1', nn.Conv2d(input_shape[0], 32, 8, 4))
         conv.add_module('relu1', nn.ReLU(inplace=True))
-        conv.add_module('conv2', nn.Conv2d(16, 32, 4, 2))
+        conv.add_module('conv2', nn.Conv2d(32, 64, 4, 2))
         conv.add_module('relu2', nn.ReLU(inplace=True))
+        conv.add_module('conv3', nn.Conv2d(64, 64, 3, 1))
+        conv.add_module('relu3', nn.ReLU(inplace=True))
 
         num_fc_in = utils.count_output_size((1,)+input_shape, conv)
+        num_fc_out = 512
         fc_a =  nn.Sequential()
-        fc_a.add_module('fc1', nn.Linear(num_fc_in, 256))
+        fc_a.add_module('fc1', nn.Linear(num_fc_in, num_fc_out))
         fc_a.add_module('fc_relu1', nn.ReLU(inplace=True))
-        fc_a.add_module('advantages', nn.Linear(256, num_actions))
+        fc_a.add_module('adv', nn.Linear(num_fc_out, num_actions))
 
         fc_v = nn.Sequential()
-        fc_v.add_module('fc2', nn.Linear(num_fc_in, 256))
+        fc_v.add_module('fc2', nn.Linear(num_fc_in, num_fc_out))
         fc_v.add_module('fc_relu2', nn.ReLU(inplace=True))
-        fc_v.add_module('value', nn.Linear(256, 1))
+        fc_v.add_module('val', nn.Linear(num_fc_out, 1))
 
         self.conv = conv
         self.fc_a = fc_a
