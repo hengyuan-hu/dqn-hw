@@ -124,6 +124,7 @@ def samples_to_minibatch(samples, q_agent, need_target_feat=False):
     ys.add_(next_qs.mul_(non_ends).mul_(q_agent.gamma))
 
     if need_target_feat:
+        # TODO: for terminal state: target_feat.mul_(non_ends) ???
         return states, actions_one_hot, ys, target_feat
     else:
         return states, actions_one_hot, ys
