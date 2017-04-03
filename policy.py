@@ -23,7 +23,10 @@ class GreedyEpsilonPolicy(object):
         q_values: 1-d numpy.array
         return: action, int
         """
-        utils.assert_eq(len(q_values.shape), 1)
+        if len(q_values.shape) == 2:
+            utils.assert_eq(q_values.shape[0], 1)
+            q_values = q_values.reshape(-1)
+        # utils.assert_eq(len(q_values.shape), 1)
         if self._greedy():
             action = q_values.argmax()
         else:
@@ -62,24 +65,42 @@ class LinearDecayGreedyEpsilonPolicy(GreedyEpsilonPolicy):
         return action
 
 
+class BatchedLDGEPolicy(LinearDecayGreedyEpsilonPolicy):
+    def select_action(self, q_values):
+        utils.assert_eq(len(q_values.shape), 2)
+        batch_size, num_actions = q_values.shape
+        actions = q_values.argmax(axis=1)
+        rand_actions = np.random.randint(0, num_actions, actions.shape)
+        greedy = (np.random.uniform(size=actions.shape) > self.epsilon).astype(np.int32)
+        actions = actions * greedy + rand_actions * (1 - greedy)
+        return actions
+
+
 if __name__ == '__main__':
-    q_values = np.random.uniform(0, 1, (3,))
-    target_actions = q_values.argmax()
+    batch_q_values = np.random.uniform(0, 1, (5, 3))
+    target_actions = batch_q_values.argmax(axis=1)
+    g_policy = BatchedLDGEPolicy(0.5, 0.5, 1)
+    actions = g_policy(batch_q_values)
+    print actions, type(actions), actions.shape
+    print target_actions
 
-    greedy_policy = GreedyEpsilonPolicy(0)
-    actions = greedy_policy(q_values)
-    assert (actions == target_actions).all()
+    # q_values = np.random.uniform(0, 1, (3,))
+    # target_actions = q_values.argmax()
 
-    uniform_policy = GreedyEpsilonPolicy(1)
-    uni_actions = uniform_policy(q_values)
-    assert not (uni_actions == target_actions).all()
+    # greedy_policy = GreedyEpsilonPolicy(0)
+    # actions = greedy_policy(q_values)
+    # assert (actions == target_actions).all()
 
-    steps = 9
-    ldg_policy = LinearDecayGreedyEpsilonPolicy(1, 0.1, steps)
-    expect_eps = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.1]
-    actual_eps = [1.0]
-    for i in range(steps+1):
-        actions = ldg_policy(q_values)
-        actual_eps.append(ldg_policy.epsilon)
-    assert (np.abs((np.array(actual_eps) - np.array(expect_eps)))
-            < 1e-5).all()
+    # uniform_policy = GreedyEpsilonPolicy(1)
+    # uni_actions = uniform_policy(q_values)
+    # assert not (uni_actions == target_actions).all()
+
+    # steps = 9
+    # ldg_policy = LinearDecayGreedyEpsilonPolicy(1, 0.1, steps)
+    # expect_eps = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.1]
+    # actual_eps = [1.0]
+    # for i in range(steps+1):
+    #     actions = ldg_policy(q_values)
+    #     actual_eps.append(ldg_policy.epsilon)
+    # assert (np.abs((np.array(actual_eps) - np.array(expect_eps)))
+    #         < 1e-5).all()

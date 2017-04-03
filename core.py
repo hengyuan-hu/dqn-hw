@@ -54,6 +54,11 @@ class ReplayMemory(object):
         else:
             self.samples.append(new_sample)
 
+    def batch_append(self, states, actions, rewards, next_states, ends):
+        # TODO: improve this
+        for i in range(len(states)):
+            self.append(states[i], actions[i], rewards[i], next_states[i], ends[i])
+
     def sample(self, batch_size, indexes=None):
         """Simpliest uniform sampling (w/o replacement) to produce a batch."""
         assert batch_size < len(self.samples), 'no enough samples to sample from'

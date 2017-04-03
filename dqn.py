@@ -72,8 +72,9 @@ class DQNAgent(object):
         """
         # TODO: not efficient, avoid compute q val if greedy
         q_vals = self.online_q_values(states)
-        utils.assert_eq(q_vals.size()[0], 1)
-        q_vals = q_vals.view(q_vals.size()[1])
+        # utils.assert_eq(q_vals.size()[0], 1)
+        # q_vals = q_vals.view(q_vals.size()[1])
+        # print q_vals.size()
         action = policy(q_vals.cpu().numpy())
         return action
 
@@ -83,48 +84,45 @@ class DQNAgent(object):
         loss = self.online_q_net.train_step(x, a, y)
         logger.append('loss', loss)
 
-    def train(self, env, policy, batch_size, num_iters, update_freq,
+    def train(self, batch_env, policy, batch_size, num_iters,
               eval_args, logger, output_path):
-        last_eval_milestone = 0
-        num_episodes = 0
-        prev_eps_iters = 0
+        log_per_iters = 1000
 
-        state_gpu = torch.cuda.FloatTensor(
-            1, env.num_frames, env.frame_size, env.frame_size)
+        states_gpu = torch.cuda.FloatTensor(*batch_env.batch_shape)
+        states = np.zeros(batch_env.batch_shape, dtype=np.float32)
+        ends = np.ones(batch_env.num_envs)
+        total_rewards = 0
+        t = time.time()
         for i in xrange(num_iters):
-            if env.end:
-                t = time.time()
-                state = env.reset()
-                rewards = 0
+            if ends.any():
+                states, ends = batch_env.reset(states, ends)
 
-            state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
-            action = self.select_action(state_gpu, policy)
-            next_state, reward = env.step(action)
-            self.replay_memory.append(state, action, reward, next_state, env.end)
-            state = next_state
-            rewards += reward
-            if (i+1) % update_freq == 0:
-                self._update_q_net(batch_size, logger)
+            states_gpu.copy_(torch.from_numpy(states))
+            actions = self.select_action(states_gpu, policy)
+            next_states, rewards, ends = batch_env.step(actions)
+            self.replay_memory.batch_append(
+                states, actions, rewards, next_states, ends)
+            states = next_states
+            total_rewards += sum(rewards)
+            self._update_q_net(batch_size, logger)
 
-            if env.end:
-                # log and eval
-                fps = (i+1-prev_eps_iters) / (time.time()-t)
-                log_msg = ('Episode: %d, Iter: %d, Reward: %d; Fps: %.2f'
-                           % (num_episodes+1, i+1, rewards, fps))
+            if (i+1) % log_per_iters == 0:
+                fps = log_per_iters / (time.time() - t)
+                log_msg = ('Iter: %d, Total Reward: %d; Fps: %.2f'
+                           % (i+1, total_rewards, fps))
                 print logger.log(log_msg)
-                num_episodes += 1
-                prev_eps_iters = i+1
+                total_rewards = 0
+                t = time.time()
 
-                milestone = (i+1) / eval_args['eval_per_iter']
-                if milestone > last_eval_milestone:
-                    last_eval_milestone = milestone
-                    eval_log = self.eval(eval_args['eval_env'],
-                                         eval_args['eval_policy'],
-                                         eval_args['num_episodes'])
-                    print logger.log(eval_log)
+            if (i+1) % eval_args['eval_per_iter'] == 0:
+                eval_log = self.eval(eval_args['eval_env'],
+                                     eval_args['eval_policy'],
+                                     eval_args['num_episodes'])
+                print logger.log(eval_log)
 
-            if (i+1) % (update_freq * self.target_update_freq) == 0:
+            if (i+1) % self.target_update_freq == 0:
                 self.target_q_net = copy.deepcopy(self.online_q_net)
+
             if (i+1) % (num_iters/4) == 0:
                 model_path = os.path.join(
                     output_path, 'net_%d.pth' % ((i+1)/(num_iters/4)))
