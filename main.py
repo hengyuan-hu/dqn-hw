@@ -83,6 +83,7 @@ def main():
     parser.add_argument('--use_double_dqn', action='store_true')
     parser.add_argument('--output', default='experiments/test')
     parser.add_argument('--algorithm', default='dqn', type=str)
+    parser.add_argument('--record', action='store_true')
 
     args = parser.parse_args()
     args.output = '%s_%s' % (args.output, args.algorithm)
@@ -110,7 +111,7 @@ if __name__ == '__main__':
     eval_env = Environment(args.env,
                            args.num_frames,
                            args.frame_size,
-                           record=True,
+                           record=args.record,
                            video_callable=lambda x:True,
                            mnt_path=os.path.join(args.output, 'monitor'))
     # env.seed(888888)
