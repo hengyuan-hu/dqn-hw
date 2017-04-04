@@ -77,7 +77,7 @@ def main():
     parser.add_argument('--train_final_eps', default=0.1, type=float)
     parser.add_argument('--train_eps_num_steps', default=1000000, type=int)
     parser.add_argument('--eval_eps', default=0.05, type=float)
-    parser.add_argument('--num_burn_in', default=500000, type=int)
+    parser.add_argument('--num_burn_in', default=50000, type=int)
     parser.add_argument('--negative_dead_reward', action='store_true',
                         help='whether die in SpaceInvaders-v0 gives a negative reward')
     parser.add_argument('--use_double_dqn', action='store_true')
