@@ -6,93 +6,97 @@ import time
 import numpy as np
 
 
-class Sample(object):
-    def __init__(self, state, action, reward, next_state, end):
-        utils.assert_eq(type(state), type(next_state))
-        self._merged_frames = np.vstack((state, next_state[-1:])) * 255.0
-        self._merged_frames = self._merged_frames.astype(np.uint8, copy=False)
-        self.action = action
-        self.reward = reward
-        self.end = end
-
-    @property
-    def state(self):
-        return self._merged_frames[:-1].astype(np.float32, copy=False) / 255.0
-
-    @property
-    def next_state(self):
-        return self._merged_frames[1:].astype(np.float32, copy=False) / 255.0
-
-    def __repr__(self):
-        info = ('S(mean): %3.4f, A: %s, R: %s, NS(mean): %3.4f, End: %s'
-                % (self.state.mean(), self.action, self.reward,
-                   self.next_state.mean(), self.end))
-        return info
-
-
-class ReplayMemory(object):
-    def __init__(self, max_size):
+class BatchReplayMemory(object):
+    def __init__(self, max_size, state_shape):
         self.max_size = max_size
-        self.samples = []
-        self.oldest_idx = 0
+        self.states = np.zeros((max_size,) + state_shape, dtype=np.uint8)
+        self.next_states = np.zeros((max_size,) + state_shape, dtype=np.uint8)
+        self.rewards = np.zeros(max_size, dtype=np.float32)
+        self.actions = np.zeros(max_size, dtype=np.int64)
+        self.ends = np.zeros(max_size, dtype=np.float32)
+
+        self.next_idx = 0
+        self.num_samples = 0
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.next_idx)
 
-    def _evict(self):
-        """Simplest FIFO eviction scheme."""
-        to_evict = self.oldest_idx
-        self.oldest_idx = (self.oldest_idx + 1) % self.max_size
-        return to_evict
+    def _get_next_batch_idxs(self, batch_size):
+        idxs = np.array(range(self.next_idx, self.next_idx+batch_size))
+        idxs %= self.max_size
+        self.next_idx = idxs[-1] + 1
+        return idxs
 
     def append(self, state, action, reward, next_state, end):
-        assert len(self.samples) <= self.max_size
-        new_sample = Sample(state, action, reward, next_state, end)
-        if len(self.samples) == self.max_size:
-            avail_slot = self._evict()
-            self.samples[avail_slot] = new_sample
-        else:
-            self.samples.append(new_sample)
+        self.batch_append(
+            np.array([state]), np.array([action]), np.array([reward]),
+            np.array([next_state]), np.array([end]))
 
     def batch_append(self, states, actions, rewards, next_states, ends):
-        # TODO: improve this
-        for i in range(len(states)):
-            self.append(states[i], actions[i], rewards[i], next_states[i], ends[i])
+        idxs = self._get_next_batch_idxs(len(states))
+        self.states[idxs] = states.astype(np.uint8)
+        self.next_states[idxs] = next_states.astype(np.uint8)
+        self.actions[idxs] = actions
+        self.rewards[idxs] = rewards
+        self.ends[idxs] = ends
+        self.num_samples = min(self.num_samples+len(states), self.max_size)
 
     def sample(self, batch_size, indexes=None):
         """Simpliest uniform sampling (w/o replacement) to produce a batch."""
-        assert batch_size < len(self.samples), 'no enough samples to sample from'
+        assert batch_size < self.num_samples, 'no enough samples to sample from'
         assert indexes is None, 'not supported yet'
-        return random.sample(self.samples, batch_size)
-
-    def clear(self):
-        self.samples = []
-        self.oldest_idx = 0
+        idxs = random.sample(xrange(self.num_samples), batch_size)
+        # idxs = range(self.num_samples)[:batch_size]
+        samples = {'states': self.states[idxs].astype(np.float32),
+                   'next_states': self.next_states[idxs].astype(np.float32),
+                   'actions': self.actions[idxs],
+                   'rewards': self.rewards[idxs],
+                   'ends': self.ends[idxs]}
+        return samples
 
 
 def _samples_to_tensors(samples):
-    assert len(samples) > 0
-    dummy_state = samples[0].state
-
-    states = np.zeros((len(samples),) + dummy_state.shape, dtype=np.float32)
-    next_states = np.zeros_like(states)
-    rewards = np.zeros((len(samples), 1), dtype=np.float32)
-    actions = np.zeros_like(rewards, dtype=np.int64)
-    non_ends = np.zeros_like(rewards)
-    for i, s in enumerate(samples):
-        states[i] = s.state
-        next_states[i] = s.next_state
-        rewards[i] = s.reward
-        actions[i] = s.action
-        non_ends[i] = 0.0 if s.end else 1.0
-
-    states = torch.from_numpy(states).cuda()
-    actions = torch.from_numpy(actions).cuda()
-    rewards = torch.from_numpy(rewards).cuda()
-    next_states = torch.from_numpy(next_states).cuda()
-    non_ends = torch.from_numpy(non_ends).cuda()
-
+    states = torch.from_numpy(samples['states']).cuda()
+    next_states = torch.from_numpy(samples['next_states']).cuda()
+    actions = torch.from_numpy(samples['actions']).view(-1, 1).cuda()
+    rewards = torch.from_numpy(samples['rewards']).view(-1, 1).cuda()
+    non_ends = 1 - torch.from_numpy(samples['ends']).view(-1, 1).cuda()
     return states, actions, rewards, next_states, non_ends
+
+
+# def test_samples():
+#     state_shape = (3, 5, 5)
+
+#     def gen_samples(batch_size):
+#         states = np.random.uniform(size=(batch_size,) + state_shape) * 255
+#         next_states = np.random.uniform(size=(batch_size,) + state_shape) * 255
+#         rewards = np.random.uniform(size=batch_size)
+#         actions = np.random.uniform(size=batch_size)
+#         ends = np.random.uniform(size=batch_size).round()
+#         return states, next_states, rewards, actions, ends
+
+#     mem = ReplayMemory(10)
+#     batch_mem = BatchReplayMemory(10, state_shape)
+
+#     for i in range(10):
+#         states, next_states, rewards, actions, ends = gen_samples(4)
+#         # print states[0].astype(np.uint8)
+#         mem.batch_append(states, actions, rewards, next_states, ends)
+#         batch_mem.batch_append(states, actions, rewards, next_states, ends)
+#         # TODO: /255.0 issue, test two samples
+#         s1 = mem.sample(2)
+#         s2 = batch_mem.sample(2)
+#         states, actions, rewards, next_states, non_ends = _samples_to_tensors(s1)
+#         states2, actions2, rewards2, next_states2, non_ends2 = _samples_to_tensors2(s2)
+
+#         assert (states.cpu().numpy() == states2.cpu().numpy()).all()
+#         assert (next_states.cpu().numpy()
+#                 == next_states2.cpu().numpy()).all()
+#         assert (actions.cpu().numpy() == actions2.cpu().numpy()).all()
+#         assert (rewards.cpu().numpy() == rewards2.cpu().numpy()).all()
+#         assert (non_ends.cpu().numpy() == non_ends2.cpu().numpy()).all()
+
+#     print 'pass'
 
 
 def samples_to_minibatch(samples, q_agent, need_target_feat=False):
@@ -115,13 +119,13 @@ def samples_to_minibatch(samples, q_agent, need_target_feat=False):
     else:
         target_q_vals = q_agent.target_q_values(next_states)
     n_actions = target_q_vals.size(1)
-    actions_one_hot = torch.zeros(len(samples), n_actions).cuda()
+    actions_one_hot = torch.zeros(len(states), n_actions).cuda()
     actions_one_hot.scatter_(1, actions, 1)
 
     if q_agent.use_double_dqn:
         online_q_values = q_agent.online_q_values(next_states)
         next_actions = online_q_values.max(1)[1] # argmax
-        next_actions_one_hot = torch.zeros(len(samples), n_actions).cuda()
+        next_actions_one_hot = torch.zeros(len(states), n_actions).cuda()
         next_actions_one_hot.scatter_(1, next_actions, 1)
         next_qs = (target_q_vals * next_actions_one_hot).sum(1)
     else:

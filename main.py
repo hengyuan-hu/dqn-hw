@@ -11,7 +11,7 @@ import torch
 from dqn import DQNAgent, PredDQNAgent
 from policy import GreedyEpsilonPolicy, BatchedLDGEPolicy
 from model import PredDQNetwork, DQNetwork, DuelingQNetwork, PredDuelingQNetwork
-from core import ReplayMemory
+from core import BatchReplayMemory
 from logger import Logger
 
 
@@ -55,7 +55,7 @@ def get_output_folder(parent_dir, env_name):
 def main():
     parser = argparse.ArgumentParser(description='Run DQN on Atari')
     parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
-    parser.add_argument('--num_envs', default=16, type=int)
+    parser.add_argument('--num_envs', default=4, type=int)
     parser.add_argument('--seed', default=6666999, type=int, help='Random seed')
     parser.add_argument('--lr', default=0.00025, type=float, help='learning rate')
     parser.add_argument('--alpha', default=0.95, type=float,
@@ -67,17 +67,17 @@ def main():
     parser.add_argument('--q_net', default='', type=str, help='load pretrained q net')
     parser.add_argument('--gamma', default=0.99, type=float, help='discount factor')
     parser.add_argument('--num_iters', default=50000000, type=int)
-    parser.add_argument('--replay_buffer_size', default=100000, type=int)
+    parser.add_argument('--replay_buffer_size', default=1000000, type=int)
     parser.add_argument('--num_frames', default=4, type=int, help='nframe, QNet input')
     parser.add_argument('--frame_size', default=84, type=int)
-    parser.add_argument('--target_q_sync_interval', default=5000, type=int)
-    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--target_q_sync_interval', default=10000, type=int)
+    parser.add_argument('--batch_size', default=32, type=int)
     # parser.add_argument('--update_freq', default=4, type=int)
     parser.add_argument('--train_start_eps', default=1.0, type=float)
     parser.add_argument('--train_final_eps', default=0.1, type=float)
     parser.add_argument('--train_eps_num_steps', default=1000000, type=int)
     parser.add_argument('--eval_eps', default=0.05, type=float)
-    parser.add_argument('--num_burn_in', default=50000, type=int)
+    parser.add_argument('--num_burn_in', default=500000, type=int)
     parser.add_argument('--negative_dead_reward', action='store_true',
                         help='whether die in SpaceInvaders-v0 gives a negative reward')
     parser.add_argument('--use_double_dqn', action='store_true')
@@ -116,7 +116,8 @@ if __name__ == '__main__':
     # env.seed(888888)
     eval_env.seed(555555)
 
-    replay_memory = ReplayMemory(args.replay_buffer_size)
+    replay_memory = BatchReplayMemory(
+        args.replay_buffer_size, (args.num_frames, args.frame_size, args.frame_size))
     train_policy = BatchedLDGEPolicy(
         args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
     eval_policy = GreedyEpsilonPolicy(args.eval_eps)
@@ -154,7 +155,7 @@ if __name__ == '__main__':
                        args.use_double_dqn)
     eval_args = {
         'eval_env': eval_env,
-        'eval_per_iter': 10000,
+        'eval_per_iter': 100000,
         'eval_policy': eval_policy,
         'num_episodes': 20,
     }
