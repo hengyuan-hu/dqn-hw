@@ -57,9 +57,9 @@ def main():
     parser.add_argument('--seed', default=6666999, type=int, help='Random seed')
     parser.add_argument('--lr', default=0.00025, type=float, help='learning rate')
     parser.add_argument('--alpha', default=0.95, type=float,
-                        help='squared gradient momentum for RMS prop')
+                        help='squared gradient momentum for RMSprop')
     parser.add_argument('--momentum', default=0.95, type=float,
-                        help='gradient momentum')
+                        help='gradient momentum for RMSprop')
     parser.add_argument('--rms_eps', default=0.01, type=float,
                         help='min squared gradient for RMS prop')
     parser.add_argument('--q_net', default='', type=str, help='load pretrained q net')
@@ -120,8 +120,9 @@ if __name__ == '__main__':
     optim_args = {
         'lr': args.lr,
         'alpha': args.alpha,
-        # 'momentum': args.momentum, # only available in dev version
-        'eps': args.rms_eps
+        'momentum': args.momentum,
+        'eps': args.rms_eps,
+        'centered': True
     }
 
     if 'dueling' == args.algorithm:
