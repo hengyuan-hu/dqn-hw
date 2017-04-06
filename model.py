@@ -76,6 +76,7 @@ class PredDQNetwork(QNetwork):
         self.predictor = predictor
 
     def forward(self, x, pred):
+        x.div_(255.0)
         feat = self.conv(x)
         feat = feat.view(feat.size(0), -1)
         feat = self.fc(feat)
@@ -138,6 +139,7 @@ class DQNetwork(QNetwork):
         self.fc = fc
 
     def forward(self, x):
+        x.div_(255.0)
         y = self.conv(x)
         y = y.view(y.size(0), -1)
         y = self.fc(y)
@@ -173,6 +175,7 @@ class DuelingQNetwork(QNetwork):
         self.fc_v = fc_v
 
     def forward(self, x):
+        x.div_(255.0)
         y = self.conv(x)
         y = y.view(y.size(0), -1)
         a = self.fc_a(y)
@@ -218,6 +221,7 @@ class PredDuelingQNetwork(QNetwork):
 
     def forward(self, x, pred):
         # TODO: better naming if works
+        x.div_(255.0)
         conv = self.conv(x)
         conv = conv.view(conv.size(0), -1)
         a = self.fc_a(conv)

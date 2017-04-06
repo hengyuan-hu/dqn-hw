@@ -9,7 +9,7 @@ import numpy as np
 class Sample(object):
     def __init__(self, state, action, reward, next_state, end):
         utils.assert_eq(type(state), type(next_state))
-        self._merged_frames = np.vstack((state, next_state[-1:])) * 255.0
+        self._merged_frames = np.vstack((state, next_state[-1:]))
         self._merged_frames = self._merged_frames.astype(np.uint8, copy=False)
         self.action = action
         self.reward = reward
@@ -17,11 +17,11 @@ class Sample(object):
 
     @property
     def state(self):
-        return self._merged_frames[:-1].astype(np.float32, copy=False) / 255.0
+        return self._merged_frames[:-1].astype(np.float32, copy=False)
 
     @property
     def next_state(self):
-        return self._merged_frames[1:].astype(np.float32, copy=False) / 255.0
+        return self._merged_frames[1:].astype(np.float32, copy=False)
 
     def __repr__(self):
         info = ('S(mean): %3.4f, A: %s, R: %s, NS(mean): %3.4f, End: %s'
