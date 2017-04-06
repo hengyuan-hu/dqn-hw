@@ -14,9 +14,14 @@ from core import ReplayMemory
 from logger import Logger
 
 
+def large_randint():
+    return random.randint(int(1e5), int(1e6))
+
+
 def main():
     parser = argparse.ArgumentParser(description='Run DQN on Atari')
-    parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
+    parser.add_argument('--rom', default='roms/space_invaders.bin',
+                        help='path to rom')
     parser.add_argument('--seed', default=6666999, type=int, help='Random seed')
     parser.add_argument('--lr', default=0.00025, type=float, help='learning rate')
     parser.add_argument('--alpha', default=0.95, type=float,
@@ -39,8 +44,7 @@ def main():
     parser.add_argument('--train_eps_num_steps', default=1000000, type=int)
     parser.add_argument('--eval_eps', default=0.05, type=float)
     parser.add_argument('--num_burn_in', default=50000, type=int)
-    parser.add_argument('--negative_dead_reward', action='store_true',
-                        help='whether die in SpaceInvaders-v0 gives a negative reward')
+    parser.add_argument('--no_op_start', default=30, type=int)
     parser.add_argument('--use_double_dqn', action='store_true')
     parser.add_argument('--output', default='experiments/test')
     parser.add_argument('--algorithm', default='dqn', type=str)
@@ -52,10 +56,10 @@ def main():
     with open(os.path.join(args.output, 'configs.txt'), 'w') as f:
         print >>f, args
 
-    random.seed(666666)
-    np.random.seed(99999)
-    torch.manual_seed(77777)
-    torch.cuda.manual_seed(555774)
+    random.seed(args.seed)
+    np.random.seed(large_randint())
+    torch.manual_seed(large_randint())
+    torch.cuda.manual_seed(large_randint())
     return args
 
 
@@ -63,11 +67,11 @@ if __name__ == '__main__':
     args = main()
     torch.backends.cudnn.benckmark = True
 
-    # TODO: unify all random seeds
-    # TODO: use flags
-    env = Environment('roms/space_invaders.bin', 3, 4, 84, 30, 3366993)
-    eval_env = Environment('roms/space_invaders.bin', 3, 4, 84, 30, 655555)
-
+    frame_skip = 3 if 'space_invaders' in args.rom else 4
+    env = Environment(args.rom, frame_skip, args.num_frames, args.frame_size,
+                      args.no_op_start, large_randint())
+    eval_env = Environment(args.rom, frame_skip, args.num_frames, args.frame_size,
+                           args.no_op_start, large_randint())
     replay_memory = ReplayMemory(args.replay_buffer_size)
     train_policy = LinearDecayGreedyEpsilonPolicy(
         args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
@@ -120,5 +124,4 @@ if __name__ == '__main__':
 
     # fianl eval
     eval_log = agent.eval(eval_env, eval_policy, 100)
-    # eval_env.reset() # finish the recording for the very last episode (?)
     print logger.log(eval_log)
