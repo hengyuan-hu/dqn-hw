@@ -63,18 +63,10 @@ if __name__ == '__main__':
     args = main()
     torch.backends.cudnn.benckmark = True
 
-    env = Environment(args.env,
-                      args.num_frames,
-                      args.frame_size,
-                      negative_dead_reward=args.negative_dead_reward)
-    eval_env = Environment(args.env,
-                           args.num_frames,
-                           args.frame_size,
-                           record=True,
-                           video_callable=lambda x:True,
-                           mnt_path=os.path.join(args.output, 'monitor'))
-    env.seed(888888)
-    eval_env.seed(555555)
+    # TODO: unify all random seeds
+    # TODO: use flags
+    env = Environment('roms/space_invaders.bin', 3, 4, 84, 30, 3366993)
+    eval_env = Environment('roms/space_invaders.bin', 3, 4, 84, 30, 655555)
 
     replay_memory = ReplayMemory(args.replay_buffer_size)
     train_policy = LinearDecayGreedyEpsilonPolicy(
