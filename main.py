@@ -23,7 +23,7 @@ def main():
     parser.add_argument('--rom', default='roms/space_invaders.bin',
                         help='path to rom')
     parser.add_argument('--seed', default=6666999, type=int, help='Random seed')
-    parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
+    parser.add_argument('--lr', default=0.00025, type=float, help='learning rate')
     parser.add_argument('--alpha', default=0.95, type=float,
                         help='squared gradient momentum for RMSprop')
     parser.add_argument('--momentum', default=0.95, type=float,
@@ -117,7 +117,6 @@ if __name__ == '__main__':
     }
     logger = Logger(os.path.join(args.output, 'train_log.txt'))
 
-    print q_net
     agent.burn_in(env, args.num_burn_in)
     agent.train(
         env, train_policy, args.batch_size, args.num_iters, args.update_freq,
