@@ -67,7 +67,7 @@ if __name__ == '__main__':
     args = main()
     torch.backends.cudnn.benckmark = True
 
-    frame_skip = 3 if 'space_invaders' in args.rom else 4
+    frame_skip = 4
     env = Environment(args.rom, frame_skip, args.num_frames, args.frame_size,
                       args.no_op_start, large_randint())
     eval_env = Environment(args.rom, frame_skip, args.num_frames, args.frame_size,

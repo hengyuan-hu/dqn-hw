@@ -179,9 +179,8 @@ class DuelingQNetwork(QNetwork):
         y = self.conv(x)
         y = y.view(y.size(0), -1)
         a = self.fc_a(y)
-        a.sub_(a.mean(1).expand_as(a))
-        v = self.fc_v(y).expand_as(a)
-        y = a + v
+        v = self.fc_v(y) - a.mean(1)
+        y = a + v.expand_as(a)
         utils.assert_eq(y.dim(), 2)
         return y
 
