@@ -37,9 +37,11 @@ class QNetwork(nn.Module):
         err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
         return err
 
-    def train_step(self, x, a, y):
+    def train_step(self, x, a, y, grad_clip=None):
         err = self.loss(x, a, y)
         err.backward()
+        if grad_clip:
+            nn.utils.clip_grad_norm(self.parameters(), grad_clip)
         self.optim.step()
         self.zero_grad()
         return err.data[0]

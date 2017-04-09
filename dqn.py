@@ -80,7 +80,7 @@ class DQNAgent(object):
     def _update_q_net(self, batch_size, logger):
         samples = self.replay_memory.sample(batch_size)
         x, a, y = core.samples_to_minibatch(samples, self)
-        loss = self.online_q_net.train_step(x, a, y)
+        loss = self.online_q_net.train_step(x, a, y, 10)
         logger.append('loss', loss)
 
     def train(self, env, policy, batch_size, num_iters, update_freq,
