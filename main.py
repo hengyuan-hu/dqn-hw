@@ -81,7 +81,7 @@ if __name__ == '__main__':
         'alpha': args.alpha,
         'momentum': args.momentum,
         'eps': args.rms_eps,
-        'centered': True
+        # 'centered': True
     }
 
     if 'dueling' == args.algorithm:
