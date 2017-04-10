@@ -40,83 +40,12 @@ class QNetwork(nn.Module):
     def train_step(self, x, a, y, grad_clip=None):
         err = self.loss(x, a, y)
         err.backward()
+
         if grad_clip:
             nn.utils.clip_grad_norm(self.parameters(), grad_clip)
         self.optim.step()
         self.zero_grad()
         return err.data[0]
-
-
-class PredDQNetwork(QNetwork):
-
-    def _build_model(self, input_shape, num_actions):
-        conv = nn.Sequential()
-        conv.add_module('conv1', nn.Conv2d(input_shape[0], 32, 8, 4))
-        conv.add_module('relu1', nn.ReLU(inplace=True))
-        conv.add_module('conv2', nn.Conv2d(32, 64, 4, 2))
-        conv.add_module('relu2', nn.ReLU(inplace=True))
-        conv.add_module('conv3', nn.Conv2d(64, 64, 3, 1))
-        conv.add_module('relu3', nn.ReLU(inplace=True))
-        num_fc_in = utils.count_output_size((1,)+input_shape, conv)
-        num_fc_out = 512
-        fc = nn.Sequential()
-        fc.add_module('fc1', nn.Linear(num_fc_in, num_fc_out))
-        fc.add_module('fc_relu1', nn.ReLU(inplace=True))
-
-        q_net = nn.Sequential()
-        q_net.add_module('output', nn.Linear(num_fc_out, num_actions))
-
-        predictor = nn.Sequential()
-        predictor.add_module('pd1', nn.Linear(num_fc_out, num_fc_out))
-        predictor.add_module('pd_relu1', nn.ReLU(inplace=True))
-        predictor.add_module('pd2', nn.Linear(num_fc_out, num_actions * num_fc_out))
-        predictor.add_module('pd_relu2', nn.ReLU(inplace=True))
-
-        self.conv = conv
-        self.fc = fc
-        self.q_net = q_net
-        self.predictor = predictor
-
-    def forward(self, x, pred):
-        x.div_(255.0)
-        feat = self.conv(x)
-        feat = feat.view(feat.size(0), -1)
-        feat = self.fc(feat)
-        utils.assert_eq(feat.dim(), 2)
-
-        q_val = self.q_net(feat)
-        pred_feat = None
-        if pred:
-            pred_feat = self.predictor(feat)
-            # pred_feat shape: [batch, num_action, num_feat]
-            pred_feat = pred_feat.view(feat.size(0), q_val.size(1), feat.size(1))
-        return q_val, feat, pred_feat
-
-    def loss(self, x, a, y, next_feat):
-        utils.assert_eq(a.dim(), 2)
-        q_vals, _, pred_feat = self.forward(Variable(x), True)
-
-        utils.assert_eq(q_vals.size(), a.size())
-        y_pred = (q_vals * Variable(a)).sum(1)
-        y_err = nn.functional.smooth_l1_loss(y_pred, Variable(y))
-
-        a_feat = Variable(a.view(a.size() + (1,)).expand_as(pred_feat))
-        pred_feat = (pred_feat * a_feat).sum(1).squeeze() # sum out action dim
-        utils.assert_eq(pred_feat.size(), next_feat.size())
-        pred_err = nn.functional.smooth_l1_loss(pred_feat, Variable(next_feat))
-        return y_err, pred_err
-
-    def train_step(self, x, a, y, next_feat):
-        """accum grads and apply every update_freq
-           equivalent to augmenting batch_size by a factor of update_freq
-        """
-        y_err, pred_err = self.loss(x, a, y, next_feat) # / self.update_freq
-        err = y_err + pred_err
-        err.backward()
-
-        self.optim.step()
-        self.zero_grad()
-        return y_err.data[0], pred_err.data[0]
 
 
 class DQNetwork(QNetwork):
@@ -246,11 +175,13 @@ class PredDuelingQNetwork(QNetwork):
         next_v_err = nn.functional.smooth_l1_loss(next_v_pred, Variable(next_v))
         return y_err, next_v_err
 
-    def train_step(self, x, a, y, next_v):
+    def train_step(self, x, a, y, next_v, grad_clip=None):
         y_err, next_v_err = self.loss(x, a, y, next_v)
         err = y_err + next_v_err
         err.backward()
 
+        if grad_clip:
+            nn.utils.clip_grad_norm(self.parameters(), grad_clip)
         self.optim.step()
         self.zero_grad()
         return y_err.data[0], next_v_err.data[0]
