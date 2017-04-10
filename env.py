@@ -24,7 +24,8 @@ class Environment(object):
                  num_frames,
                  frame_size,
                  no_op_start,
-                 rand_seed):
+                 rand_seed,
+                 dead_as_eoe):
         self.ale = self._init_ale(rand_seed, rom_file)
         # normally (160, 210)
         self.screen_width, self.screen_height = self.ale.getScreenDims()
@@ -34,6 +35,7 @@ class Environment(object):
         self.num_frames = num_frames
         self.frame_size = frame_size
         self.no_op_start = no_op_start
+        self.dead_as_eoe = dead_as_eoe
 
         self.clipped_reward = 0
         self.total_reward = 0
@@ -76,7 +78,10 @@ class Environment(object):
             self.frame_queue.append(
                 np.zeros((self.frame_size, self.frame_size), dtype=np.float32))
 
-        self.ale.reset_game()
+        if self.ale.game_over():
+            self.ale.reset_game()
+        else:
+            assert self.dead_as_eoe
         n = np.random.randint(0, self.no_op_start)
         for i in range(n):
             if i == n - 1:
@@ -96,13 +101,14 @@ class Environment(object):
         assert not self.end
         reward = 0
         clipped_reward = 0
+        old_lives = self.ale.lives()
         for _ in range(self.frame_skip):
             self.prev_screen = self.ale.getScreenRGB()
             r = self.ale.act(self.actions[action_idx])
             reward += r
             clipped_reward += np.sign(r)
-
-            if self.ale.game_over():
+            dead = (self.ale.lives() < old_lives)
+            if self.ale.game_over() or (self.dead_as_eoe and dead):
                 self.end = True
                 break
 

@@ -69,9 +69,9 @@ if __name__ == '__main__':
 
     frame_skip = 4
     env = Environment(args.rom, frame_skip, args.num_frames, args.frame_size,
-                      args.no_op_start, large_randint())
+                      args.no_op_start, large_randint(), True)
     eval_env = Environment(args.rom, frame_skip, args.num_frames, args.frame_size,
-                           args.no_op_start, large_randint())
+                           args.no_op_start, large_randint(), False)
     replay_memory = ReplayMemory(args.replay_buffer_size)
     train_policy = LinearDecayGreedyEpsilonPolicy(
         args.train_start_eps, args.train_final_eps, args.train_eps_num_steps)
