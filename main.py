@@ -9,7 +9,7 @@ from env import Environment
 import torch
 from dqn import DQNAgent, PredDQNAgent
 from policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
-from model import PredDQNetwork, DQNetwork, DuelingQNetwork, PredDuelingQNetwork
+from model import DQNetwork, DuelingQNetwork, PredDuelingQNetwork
 from core import ReplayMemory
 from logger import Logger
 
