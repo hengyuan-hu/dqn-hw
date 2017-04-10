@@ -162,7 +162,7 @@ class DuelingQNetwork(QNetwork):
 
         num_fc_in = utils.count_output_size((1,)+input_shape, conv)
         num_fc_out = 512
-        fc_a =  nn.Sequential()
+        fc_a = nn.Sequential()
         fc_a.add_module('fc1', nn.Linear(num_fc_in, num_fc_out))
         fc_a.add_module('fc_relu1', nn.ReLU(inplace=True))
         fc_a.add_module('adv', nn.Linear(num_fc_out, num_actions))
@@ -200,7 +200,7 @@ class PredDuelingQNetwork(QNetwork):
 
         num_fc_in = utils.count_output_size((1,)+input_shape, conv)
         num_fc_out = 512
-        fc_a =  nn.Sequential()
+        fc_a = nn.Sequential()
         fc_a.add_module('fc_a', nn.Linear(num_fc_in, num_fc_out))
         fc_a.add_module('relu_a', nn.ReLU(inplace=True))
         fc_a.add_module('adv', nn.Linear(num_fc_out, num_actions))

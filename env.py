@@ -1,10 +1,10 @@
 """Wrapper of OpenAI Gym enviroment"""
-import cv2
 import os
 from collections import deque
+import cv2
 import numpy as np
 from ale_python_interface import ALEInterface
-import time
+# import time
 
 
 glb_counter = 0
@@ -25,7 +25,7 @@ class Environment(object):
                  frame_size,
                  no_op_start,
                  rand_seed):
-        self.ale = self._init_ale(rand_seed, frame_skip, rom_file)
+        self.ale = self._init_ale(rand_seed, rom_file)
         # normally (160, 210)
         self.screen_width, self.screen_height = self.ale.getScreenDims()
         self.actions = self.ale.getMinimalActionSet()
@@ -43,7 +43,7 @@ class Environment(object):
         self.end = True
 
     @staticmethod
-    def _init_ale(rand_seed, frame_skip, rom_file):
+    def _init_ale(rand_seed, rom_file):
         assert os.path.exists(rom_file), '%s does not exists.'
         ale = ALEInterface()
         ale.setInt('random_seed', rand_seed)
@@ -96,7 +96,7 @@ class Environment(object):
         assert not self.end
         reward = 0
         clipped_reward = 0
-        for i in range(self.frame_skip):
+        for _ in range(self.frame_skip):
             self.prev_screen = self.ale.getScreenRGB()
             r = self.ale.act(self.actions[action_idx])
             reward += r

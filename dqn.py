@@ -1,4 +1,5 @@
 """Main DQN agent."""
+import os
 import time
 import copy
 import torch
@@ -8,8 +9,6 @@ import numpy as np
 import utils
 from policy import GreedyEpsilonPolicy
 import core
-from collections import Counter
-import os
 
 
 class DQNAgent(object):
@@ -130,7 +129,7 @@ class DQNAgent(object):
                     output_path, 'net_%d.pth' % ((i+1)/(num_iters/4)))
                 torch.save(self.online_q_net.state_dict(), model_path)
 
-    def eval(self, env, policy, num_episodes, max_episode_length=None):
+    def eval(self, env, policy, num_episodes):
         """Test your agent with a provided environment.
 
         You can also call the render function here if you want to
@@ -148,7 +147,7 @@ class DQNAgent(object):
             state_gpu.copy_(torch.from_numpy(state.reshape(state_gpu.size())))
             action = self.select_action(state_gpu, policy)
             actions[action] += 1
-            state, _  = env.step(action)
+            state, _ = env.step(action)
 
             if env.end:
                 total_rewards[eps_idx] = env.total_reward
