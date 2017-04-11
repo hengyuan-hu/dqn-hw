@@ -80,8 +80,8 @@ class Environment(object):
 
         if self.ale.game_over():
             self.ale.reset_game()
-        else:
-            assert self.dead_as_eoe
+        # else:
+        #     assert self.dead_as_eoe
         n = np.random.randint(0, self.no_op_start)
         for i in range(n):
             if i == n - 1:
@@ -119,7 +119,9 @@ class Environment(object):
 
 
 if __name__ == '__main__':
-    env = Environment('roms/space_invaders.bin', 4, 4, 84, 30, 33)
+    env = Environment('roms/space_invaders.bin', 4, 4, 84, 30, 33, False)
+
+    print 'starting with game over?', env.ale.game_over()
 
     state = env.reset()
     i = 0
