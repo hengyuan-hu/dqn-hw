@@ -28,7 +28,6 @@ class Environment(object):
                  dead_as_eoe):
         self.ale = self._init_ale(rand_seed, rom_file)
         # normally (160, 210)
-        self.screen_width, self.screen_height = self.ale.getScreenDims()
         self.actions = self.ale.getMinimalActionSet()
 
         self.frame_skip = frame_skip
@@ -39,8 +38,9 @@ class Environment(object):
 
         self.clipped_reward = 0
         self.total_reward = 0
+        screen_width, screen_height = self.ale.getScreenDims()
         self.prev_screen = np.zeros(
-            (self.screen_height, self.screen_width, 3), dtype=np.float32)
+            (screen_height, screen_width, 3), dtype=np.float32)
         self.frame_queue = deque(maxlen=num_frames)
         self.end = True
 
@@ -101,6 +101,7 @@ class Environment(object):
         reward = 0
         clipped_reward = 0
         old_lives = self.ale.lives()
+
         for _ in range(self.frame_skip):
             self.prev_screen = self.ale.getScreenRGB()
             r = self.ale.act(self.actions[action_idx])
