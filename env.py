@@ -71,15 +71,14 @@ class Environment(object):
 
     def reset(self):
         self.end = False
-        self.clipped_reward = 0
-        self.total_reward = 0
-
         for _ in range(self.num_frames - 1):
             self.frame_queue.append(
                 np.zeros((self.frame_size, self.frame_size), dtype=np.float32))
 
         if self.ale.game_over():
             self.ale.reset_game()
+            self.clipped_reward = 0
+            self.total_reward = 0
         # else:
         #     assert self.dead_as_eoe
         n = np.random.randint(0, self.no_op_start)
