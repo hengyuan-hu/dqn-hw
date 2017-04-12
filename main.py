@@ -9,7 +9,8 @@ from env import Environment
 import torch
 from dqn import DQNAgent, PredDQNAgent
 from policy import GreedyEpsilonPolicy, LinearDecayGreedyEpsilonPolicy
-from model import DQNetwork, DuelingQNetwork, PredDuelingQNetwork
+from model import DQNetwork, DuelingQNetwork, PredDuelingQNetwork, \
+    SinglePredDuelingQNetwork
 from core import ReplayMemory
 from logger import Logger
 
@@ -90,8 +91,8 @@ if __name__ == '__main__':
     elif 'pdueling' == args.algorithm:
         QNClass = PredDuelingQNetwork
         AgentClass = PredDQNAgent
-    elif 'pdqn' == args.algorithm:
-        QNClass = PredDQNetwork
+    elif 'spdueling' == args.algorithm:
+        QNClass = SinglePredDuelingQNetwork
         AgentClass = PredDQNAgent
     elif 'dqn' == args.algorithm:
         QNClass = DQNetwork
