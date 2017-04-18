@@ -17,8 +17,7 @@ class QNetwork(nn.Module):
         self._build_model((num_frames, frame_size, frame_size), num_actions)
         utils.init_net(self, net_file)
         self.cuda()
-        # self.optim = torch.optim.RMSprop(self.parameters(), **optim_args)
-        self.optim = torch.optim.Adam(self.parameters(), lr=1e-3, eps=1e-3)
+        self.optim = torch.optim.RMSprop(self.parameters(), **optim_args)
 
     def _build_model(self, input_shape, num_actions):
         """
