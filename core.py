@@ -11,6 +11,7 @@ class Sample(object):
         utils.assert_eq(type(state), type(next_state))
         self._state = state.astype(np.uint8)
         self._next_state = next_state.astype(np.uint8)
+        # assert (self._state[1:] == self._next_state[:-1]).all()
         self.action = action
         self.reward = reward
         self.end = end
