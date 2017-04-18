@@ -51,7 +51,8 @@ def main():
     parser.add_argument('--algorithm', default='dqn', type=str)
 
     args = parser.parse_args()
-    args.output = '%s_%s' % (args.output, args.algorithm)
+    game_name = args.rom.split('/')[-1].split('.')[0]
+    args.output = '%s_%s_%s' % (args.output, game_name, args.algorithm)
     if not os.path.exists(args.output):
         os.makedirs(args.output)
     with open(os.path.join(args.output, 'configs.txt'), 'w') as f:
@@ -111,10 +112,10 @@ if __name__ == '__main__':
                        args.target_q_sync_interval,
                        args.use_double_dqn)
     eval_args = {
-        'eval_env': eval_env,
+        'env': eval_env,
         'eval_per_iter': 100000,
-        'eval_policy': eval_policy,
-        'num_episodes': 20,
+        'policy': eval_policy,
+        'num_eps': 20,
     }
     logger = Logger(os.path.join(args.output, 'train_log.txt'))
 

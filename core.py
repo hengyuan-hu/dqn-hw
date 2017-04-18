@@ -114,8 +114,7 @@ def samples_to_minibatch(samples, q_agent, need_target_feat=False):
     actions_one_hot.scatter_(1, actions, 1)
 
     if q_agent.use_double_dqn:
-        online_q_values = q_agent.online_q_values(next_states)
-        next_actions = online_q_values.max(1)[1] # argmax
+        next_actions = q_agent.online_q_values(next_states).max(1)[1]
         next_actions_one_hot = torch.zeros(len(samples), n_actions).cuda()
         next_actions_one_hot.scatter_(1, next_actions, 1)
         next_qs = (target_q_vals * next_actions_one_hot).sum(1)

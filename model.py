@@ -40,7 +40,6 @@ class QNetwork(nn.Module):
     def train_step(self, x, a, y, grad_clip=None):
         err = self.loss(x, a, y)
         err.backward()
-
         if grad_clip:
             nn.utils.clip_grad_norm(self.parameters(), grad_clip)
         self.optim.step()
@@ -179,7 +178,6 @@ class PredDuelingQNetwork(QNetwork):
         y_err, next_v_err = self.loss(x, a, y, next_v)
         err = y_err + next_v_err
         err.backward()
-
         if grad_clip:
             nn.utils.clip_grad_norm(self.parameters(), grad_clip)
         self.optim.step()
@@ -255,7 +253,6 @@ class SinglePredDuelingQNetwork(QNetwork):
         y_err, next_v_err = self.loss(x, a, y, next_v)
         err = y_err + next_v_err
         err.backward()
-
         if grad_clip:
             nn.utils.clip_grad_norm(self.parameters(), grad_clip)
         self.optim.step()
